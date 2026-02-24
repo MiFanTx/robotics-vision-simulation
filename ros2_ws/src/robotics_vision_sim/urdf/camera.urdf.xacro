@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="camera">
+
+  <!-- TODO 1: Define a link called "camera_link" 
+       with a small box visual (0.05 x 0.05 x 0.05 metres) -->
+  <link name="world"/>
+
+  <link name="camera_link">
+    <visual>
+      <geometry>
+        <box size="0.05 0.05 0.05"/>
+      </geometry>
+    </visual>
+  </link>
+
+
+  <!-- TODO 2: Define a joint called "camera_joint" 
+       that fixes the camera to the "world" frame
+       Position: 0.5m in front, 0.5m to the side, 1.0m high
+       Hint: joint type="fixed" -->
+  <joint name="camera_joint" type="fixed">
+    <origin xyz="0.5 0.5 1.0" rpy="0.0 0.0 0.0"/>
+    <parent link="world"/>
+    <child link="camera_link"/>
+  </joint>
+
+  <!-- Gazebo plugin -->
+  <gazebo reference="camera_link">
+    <sensor type="depth" name="depth_camera">
+      <always_on>true</always_on>
+      <update_rate>30.0</update_rate>
+      <visualize>false</visualize>
+      <camera>
+        <horizontal_fov>1.047</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>B8G8R8</format>
+        </image>
+        <depth_camera></depth_camera>
+        <clip>
+          <near>0.1</near>
+          <far>10.0</far>
+        </clip>
+      </camera>
+      <plugin name="camera_plugin" filename="libgazebo_ros_camera.so">
+        <ros>
+          <namespace>camera</namespace>
+          <remapping>image_raw:=/camera/image_raw</remapping>
+          <remapping>depth/image_raw:=/camera/depth/image_raw</remapping>
+          <remapping>camera_info:=/camera/camera_info</remapping>
+          <remapping>points:=/camera/points</remapping>
+        </ros>
+        <camera_name>camera</camera_name>
+        <frame_name>camera_link</frame_name>
+        <min_depth>0.1</min_depth>
+        <max_depth>10.0</max_depth>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+</robot>

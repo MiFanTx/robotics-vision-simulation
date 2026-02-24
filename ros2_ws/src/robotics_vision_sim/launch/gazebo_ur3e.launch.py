@@ -6,6 +6,8 @@ from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 import xacro
+import tempfile
+
 
 
 def generate_launch_description():
@@ -27,6 +29,19 @@ def generate_launch_description():
         }
     )
     robot_description = {'robot_description': robot_description_config.toxml()}
+
+    camera_sdf_path = os.path.join(
+        get_package_share_directory('robotics_vision_sim'),
+        'urdf',
+        'camera.sdf'
+    )
+
+    spawn_camera = Node(
+        package='gazebo_ros',
+        executable='spawn_entity.py',
+        arguments=['-file', camera_sdf_path,'-entity', 'camera'],
+        output='screen'
+    )
 
     # Robot State Publisher
     robot_state_publisher = Node(
@@ -81,6 +96,7 @@ def generate_launch_description():
         gazebo,
         robot_state_publisher,
         spawn_entity,
+        spawn_camera,
         delayed_joint_state_broadcaster,
         delayed_joint_trajectory_controller,
     ])
