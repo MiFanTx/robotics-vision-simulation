@@ -49,6 +49,12 @@ def generate_launch_description():
         output='screen'
     )
 
+    pick_place_controller = Node(
+        package='robotics_vision_sim',
+        executable='pick_place_controller',
+        output='screen'
+    )
+
     # Robot State Publisher
     robot_state_publisher = Node(
         package='robot_state_publisher',
@@ -98,12 +104,14 @@ def generate_launch_description():
         actions=[joint_trajectory_controller_spawner]
     )
 
+
     return LaunchDescription([
         gazebo,
         robot_state_publisher,
         spawn_entity,
         spawn_camera,
         camera_tf_broadcaster,
+        pick_place_controller,
         delayed_joint_state_broadcaster,
         delayed_joint_trajectory_controller,
     ])

@@ -26,6 +26,7 @@ setup(
     entry_points={
         'console_scripts': [
             'camera_tf_broadcaster = robotics_vision_sim.nodes.camera_tf_broadcaster:main',
+            'pick_place_controller = robotics_vision_sim.nodes.pick_place_controller:main',
         ],
     },
 )
