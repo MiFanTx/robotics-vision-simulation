@@ -25,6 +25,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'camera_tf_broadcaster = robotics_vision_sim.nodes.camera_tf_broadcaster:main',
         ],
     },
 )
