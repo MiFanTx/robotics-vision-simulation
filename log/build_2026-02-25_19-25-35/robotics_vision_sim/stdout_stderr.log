@@ -1,0 +1,16 @@
+running develop
+running egg_info
+writing robotics_vision_sim.egg-info/PKG-INFO
+writing dependency_links to robotics_vision_sim.egg-info/dependency_links.txt
+writing entry points to robotics_vision_sim.egg-info/entry_points.txt
+writing requirements to robotics_vision_sim.egg-info/requires.txt
+writing top-level names to robotics_vision_sim.egg-info/top_level.txt
+reading manifest file 'robotics_vision_sim.egg-info/SOURCES.txt'
+writing manifest file 'robotics_vision_sim.egg-info/SOURCES.txt'
+running build_ext
+Creating /home/yide/Workspace/robotics-vision-simulation/install/robotics_vision_sim/lib/python3.10/site-packages/robotics-vision-sim.egg-link (link to .)
+Installing camera_tf_broadcaster script to /home/yide/Workspace/robotics-vision-simulation/install/robotics_vision_sim/lib/robotics_vision_sim
+Installing pick_place_controller script to /home/yide/Workspace/robotics-vision-simulation/install/robotics_vision_sim/lib/robotics_vision_sim
+
+Installed /home/yide/Workspace/robotics-vision-simulation/build/robotics_vision_sim
+running symlink_data

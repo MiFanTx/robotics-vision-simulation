@@ -1,0 +1,18 @@
+[0.344s] Invoking command in '/home/yide/Workspace/robotics-vision-simulation/build/robotics_vision_sim': PYTHONPATH=/home/yide/Workspace/robotics-vision-simulation/build/robotics_vision_sim/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/yide/Workspace/robotics-vision-simulation/install/robotics_vision_sim/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/yide/Workspace/robotics-vision-simulation/build/robotics_vision_sim/build --no-deps symlink_data
+[0.493s] running develop
+[0.577s] running egg_info
+[0.577s] writing robotics_vision_sim.egg-info/PKG-INFO
+[0.577s] writing dependency_links to robotics_vision_sim.egg-info/dependency_links.txt
+[0.577s] writing entry points to robotics_vision_sim.egg-info/entry_points.txt
+[0.577s] writing requirements to robotics_vision_sim.egg-info/requires.txt
+[0.577s] writing top-level names to robotics_vision_sim.egg-info/top_level.txt
+[0.578s] reading manifest file 'robotics_vision_sim.egg-info/SOURCES.txt'
+[0.578s] writing manifest file 'robotics_vision_sim.egg-info/SOURCES.txt'
+[0.579s] running build_ext
+[0.579s] Creating /home/yide/Workspace/robotics-vision-simulation/install/robotics_vision_sim/lib/python3.10/site-packages/robotics-vision-sim.egg-link (link to .)
+[0.580s] Installing camera_tf_broadcaster script to /home/yide/Workspace/robotics-vision-simulation/install/robotics_vision_sim/lib/robotics_vision_sim
+[0.580s] Installing pick_place_controller script to /home/yide/Workspace/robotics-vision-simulation/install/robotics_vision_sim/lib/robotics_vision_sim
+[0.580s] 
+[0.580s] Installed /home/yide/Workspace/robotics-vision-simulation/build/robotics_vision_sim
+[0.580s] running symlink_data
+[0.597s] Invoked command in '/home/yide/Workspace/robotics-vision-simulation/build/robotics_vision_sim' returned '0': PYTHONPATH=/home/yide/Workspace/robotics-vision-simulation/build/robotics_vision_sim/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/yide/Workspace/robotics-vision-simulation/install/robotics_vision_sim/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py develop --editable --build-directory /home/yide/Workspace/robotics-vision-simulation/build/robotics_vision_sim/build --no-deps symlink_data

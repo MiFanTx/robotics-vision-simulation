@@ -1,5 +1,5 @@
 # Goal - what the client sends
-string objectid
+string object_id
 geometry_msgs/PoseStamped object_pose
 geometry_msgs/PoseStamped target_pose
 float64 gripper_width
