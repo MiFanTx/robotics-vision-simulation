@@ -1,0 +1,23 @@
+# Goal - what the client sends
+string objectid
+geometry_msgs/PoseStamped object_pose
+geometry_msgs/PoseStamped target_pose
+float64 gripper_width
+
+---
+# Result - what's returned when complete
+uint8 status
+string message
+float64 total_time_sec
+
+uint8 STATUS_SUCCESS = 0
+uint8 STATUS_FAILURE = 1
+uint8 STATUS_ABORTED = 2
+uint8 STATUS_CANCELED = 3
+
+---
+# Feedback - what's sent during execution
+
+string current_stage
+float32 progress_percent
+string status_message
