@@ -12,14 +12,20 @@ from pymoveit2.robots import ur as robot
 
 from robotics_vision_sim_msgs.action import PickPlace
 
+from threading import Thread, Event
+
+
+
 class PickPlaceController(Node):
     
     def __init__(self):
         super().__init__('pick_place_server')
         
-        self.safe_height = 0.3
+        self.safe_height = 0.05
 
         self.callback_group = ReentrantCallbackGroup()
+        self.moveit2_callback_group = ReentrantCallbackGroup()
+
 
         self.action_server = ActionServer(
             self,
@@ -37,14 +43,30 @@ class PickPlaceController(Node):
             base_link_name=robot.base_link_name(),
             end_effector_name=robot.end_effector_name(),
             group_name=robot.MOVE_GROUP_ARM,
-            callback_group=self.callback_group,
+            callback_group=self.moveit2_callback_group,
             use_move_group_action=True
         )
 
         self.moveit2.max_velocity = 0.5
         self.moveit2.max_acceleration = 0.5
 
+        # In __init__, replace the add_collision_box call with:
+        self.create_timer(2.0, self._setup_planning_scene)
+        self._scene_setup_done = False
+
         self.get_logger().info('Pick and Place Controller Initialised!')
+
+    def _setup_planning_scene(self):
+        if self._scene_setup_done:
+            return
+        self.moveit2.add_collision_box(
+            id='ground',
+            size=[2.0, 2.0, 0.01],
+            position=[0.0, 0.0, -0.005],
+            frame_id='world'
+        )
+        self._scene_setup_done = True
+        self.get_logger().info('Planning scene setup complete')
 
     def goal_callback(self, goal_request: PickPlace.Goal):
         self.get_logger().info(f'Received goal requestion for object: {goal_request.object_id}')
@@ -54,7 +76,11 @@ class PickPlaceController(Node):
         self.get_logger().info('Received cancel request')
         return CancelResponse.ACCEPT
     
-    def executable_callback(self, goal_handle: ServerGoalHandle):
+    async def executable_callback(self, goal_handle: ServerGoalHandle):
+
+        time.sleep(3)
+
+
         self.get_logger().info(f'Received goal: Pick "{goal_handle.request.object_id}"')
         feedback = PickPlace.Feedback()
 
@@ -101,6 +127,7 @@ class PickPlaceController(Node):
             self.get_logger().info(f'  [{progress:.0f}%] {stage_name}: {status_msgs}')
 
             if stage_name == 'MOVING_TO_OBJECT':
+                self.get_logger().info(f'Planning pose: frame={goal_handle.request.object_pose.header.frame_id}, pos=[{obj_pos.x}, {obj_pos.y}, {obj_pos.z}]')
                 self.moveit2.move_to_pose(
                     position=[obj_pos.x, obj_pos.y, obj_safe_z],
                     quat_xyzw=[obj_ori.x, obj_ori.y, obj_ori.z, obj_ori.w]
@@ -113,7 +140,7 @@ class PickPlaceController(Node):
                 )
             
             elif stage_name == 'GRASPING':
-                pass
+                continue
 
             elif stage_name == 'LIFTING':
                 self.moveit2.move_to_pose(
@@ -134,7 +161,7 @@ class PickPlaceController(Node):
                 )
             
             elif stage_name == 'PLACING':
-                pass
+                continue
 
             elif stage_name == 'RETREATING':
                 self.moveit2.move_to_pose(
@@ -147,7 +174,19 @@ class PickPlaceController(Node):
                     joint_positions=[0.0, -1.5707, 0.0, -1.5707, 0.0, 0.0]
                 ) # move back home
 
-            self.moveit2.wait_until_executed()
+            success = self.moveit2.wait_until_executed()
+            time.sleep(1)
+            if not success:
+                goal_handle.abort()
+                self.moveit2.move_to_configuration(
+                    joint_positions=[0.0, -1.5707, 0.0, -1.5707, 0.0, 0.0]
+                ) # move back home
+                self.moveit2.wait_until_executed()
+                result = PickPlace.Result()
+                result.status = PickPlace.Result.STATUS_ABORTED
+                result.message = f'Pick and place aborted at stage {stage_name}'
+                result.total_time_sec = time.time() - start_time
+                return result
 
         result = PickPlace.Result()
         result.status = PickPlace.Result.STATUS_SUCCESS
@@ -160,7 +199,7 @@ class PickPlaceController(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = PickPlaceController()
-    executor = MultiThreadedExecutor()
+    executor = MultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
 
     try:
