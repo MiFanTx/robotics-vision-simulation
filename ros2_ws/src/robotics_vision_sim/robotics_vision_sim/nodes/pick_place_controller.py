@@ -12,16 +12,13 @@ from pymoveit2.robots import ur as robot
 
 from robotics_vision_sim_msgs.action import PickPlace
 
-from threading import Thread, Event
-
-
 
 class PickPlaceController(Node):
     
     def __init__(self):
         super().__init__('pick_place_server')
         
-        self.safe_height = 0.05
+        self.safe_height = 0.2
 
         self.callback_group = ReentrantCallbackGroup()
         self.moveit2_callback_group = ReentrantCallbackGroup()
@@ -50,9 +47,9 @@ class PickPlaceController(Node):
         self.moveit2.max_velocity = 0.5
         self.moveit2.max_acceleration = 0.5
 
-        # In __init__, replace the add_collision_box call with:
-        self.create_timer(2.0, self._setup_planning_scene)
-        self._scene_setup_done = False
+        # # In __init__, replace the add_collision_box call with:
+        # self.create_timer(2.0, self._setup_planning_scene)
+        # self._scene_setup_done = False
 
         self.get_logger().info('Pick and Place Controller Initialised!')
 
@@ -76,10 +73,8 @@ class PickPlaceController(Node):
         self.get_logger().info('Received cancel request')
         return CancelResponse.ACCEPT
     
-    async def executable_callback(self, goal_handle: ServerGoalHandle):
-
-        time.sleep(3)
-
+    def executable_callback(self, goal_handle: ServerGoalHandle):
+    # async def executable_callback(self, goal_handle: ServerGoalHandle):
 
         self.get_logger().info(f'Received goal: Pick "{goal_handle.request.object_id}"')
         feedback = PickPlace.Feedback()
@@ -175,7 +170,6 @@ class PickPlaceController(Node):
                 ) # move back home
 
             success = self.moveit2.wait_until_executed()
-            time.sleep(1)
             if not success:
                 goal_handle.abort()
                 self.moveit2.move_to_configuration(
@@ -199,7 +193,7 @@ class PickPlaceController(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = PickPlaceController()
-    executor = MultiThreadedExecutor(num_threads=4)
+    executor = MultiThreadedExecutor(num_threads=2)
     executor.add_node(node)
 
     try:
