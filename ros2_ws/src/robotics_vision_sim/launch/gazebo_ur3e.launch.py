@@ -10,23 +10,19 @@ import xacro
 
 def generate_launch_description():
     # Get URDF via xacro
-    ur_description_path = get_package_share_directory('ur_description')
-    xacro_file = os.path.join(ur_description_path, 'urdf', 'ur.urdf.xacro')
-    
-    robot_description_config = xacro.process_file(
-        xacro_file,
-        mappings={
-            'name': 'ur3e',
-            'ur_type': 'ur3e',
-            'sim_gazebo': 'true',
-            'simulation_controllers': os.path.join(
-                get_package_share_directory('robotics_vision_sim'), 
-                'config', 
-                'ur_controllers.yaml'
-            )
-        }
-    )
-    robot_description = {'robot_description': robot_description_config.toxml()}
+    xacro_file = os.path.join(get_package_share_directory('robotics_vision_sim'), 'urdf', 'ur3e_robotiq_2f85.urdf.xacro')
+    doc = xacro.parse(open(xacro_file))
+    xacro.process_doc(doc, mappings={
+        'name': 'ur3e',
+        'ur_type': 'ur3e',
+        'sim_gazebo': 'true',
+        'simulation_controllers': os.path.join(
+            get_package_share_directory('robotics_vision_sim'),
+            'config',
+            'ur_controllers.yaml'
+        )
+    })
+    robot_description = {'robot_description': doc.toxml()}
 
     # Camera SDF
     camera_sdf_path = os.path.join(
@@ -93,6 +89,15 @@ def generate_launch_description():
         output='screen',
     )
 
+    gripper_controller_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['gripper_controller', '--controller-manager', '/controller_manager'],
+        output='screen',
+    )
+
+
+
     # Delay controller spawning to ensure robot is loaded first
     delayed_joint_state_broadcaster = TimerAction(
         period=3.0,
@@ -104,6 +109,10 @@ def generate_launch_description():
         actions=[joint_trajectory_controller_spawner]
     )
 
+    delayed_gripper_controller = TimerAction(
+        period=5.0,
+        actions=[gripper_controller_spawner]
+    )
 
     return LaunchDescription([
         gazebo,
@@ -114,4 +123,5 @@ def generate_launch_description():
         pick_place_controller,
         delayed_joint_state_broadcaster,
         delayed_joint_trajectory_controller,
+        delayed_gripper_controller
     ])
