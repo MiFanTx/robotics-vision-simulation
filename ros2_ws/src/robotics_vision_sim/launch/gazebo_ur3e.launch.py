@@ -58,12 +58,18 @@ def generate_launch_description():
         output='screen',
         parameters=[robot_description]
     )
+    world_file = os.path.join(
+        get_package_share_directory('robotics_vision_sim'),
+        'worlds',
+        'pick_place.world'
+    )
 
     # Gazebo
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')
         ]),
+        launch_arguments={'world': world_file}.items()
     )
 
     # Spawn Robot
