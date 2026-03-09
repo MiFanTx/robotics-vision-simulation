@@ -12,5 +12,28 @@
 
     <plugin name="gazebo_link_attacher" filename="libgazebo_link_attacher.so"/>
 
+    <model name="pick_box">
+      <pose>0.4 0.2 0.025 0 0 0</pose>
+      <static>false</static>
+      <link name="pick_box">
+        <collision name="collision">
+          <geometry>
+            <box><size>0.05 0.05 0.05</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>0.05 0.05 0.05</size></box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+          </material>
+        </visual>
+        <inertial>
+          <mass>0.1</mass>
+        </inertial>
+      </link>
+    </model>
+
   </world>
 </sdf>

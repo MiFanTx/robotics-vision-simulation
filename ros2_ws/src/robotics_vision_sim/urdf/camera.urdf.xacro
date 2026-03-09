@@ -1,8 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://wiki.ros.org/xacro" name="camera">
 
-  <!-- TODO 1: Define a link called "camera_link" 
-       with a small box visual (0.05 x 0.05 x 0.05 metres) -->
   <link name="world"/>
 
   <link name="camera_link">
@@ -13,11 +11,6 @@
     </visual>
   </link>
 
-
-  <!-- TODO 2: Define a joint called "camera_joint" 
-       that fixes the camera to the "world" frame
-       Position: 0.5m in front, 0.5m to the side, 1.0m high
-       Hint: joint type="fixed" -->
   <joint name="camera_joint" type="fixed">
     <origin xyz="0.5 0.5 1.0" rpy="0.0 0.0 0.0"/>
     <parent link="world"/>
