@@ -21,6 +21,8 @@ class PickPlaceController(Node):
     def __init__(self):
         super().__init__('pick_place_controller')
 
+        self.pre_grasp_ee_pose = None
+        self.pre_place_ee_pose = None
 
         self.safe_height = 0.05 # the stopping distance above the object in meter
 
@@ -171,18 +173,43 @@ class PickPlaceController(Node):
             # --- MOTION STAGES ---
             if stage_name == 'MOVING_TO_OBJECT':
                 self.get_logger().info(f'Planning pose: frame={goal_handle.request.object_pose.header.frame_id}, pos=[{obj_pos.x}, {obj_pos.y}, {obj_pos.z}]')
+                
+                # self.moveit2.set_path_joint_constraint(joint_positions=[-1.5707], joint_names=['elbow_joint'], tolerance=1.5)
+                # self.moveit2.set_path_joint_constraint(joint_positions=[-1.5707], joint_names=['wrist_1_joint'], tolerance=0.5)
+
                 success = self._execute_motion(
                     lambda: self.moveit2.move_to_pose(
                         position=[obj_pos.x, obj_pos.y, obj_safe_z],
                         quat_xyzw=[obj_ori.x, obj_ori.y, obj_ori.z, obj_ori.w]
                     ), stage_name)
 
+                # self.moveit2.clear_path_constraints()
+
+                if success:
+                    # Get actual EE pose after arriving
+                    self.pre_grasp_ee_pose = self.moveit2.compute_fk(fk_link_names=['EE_robotiq_2f85'])
+                    if self.pre_grasp_ee_pose:
+                        self.get_logger().info(f'>>> Actual EE pose: {self.pre_grasp_ee_pose[0].pose.position}')
+
+                # success = self._execute_motion(
+                #     lambda: self.moveit2.move_to_configuration(
+                #         joint_positions=[0.2, -1.0, 1.0, -1.5, -1.6, 0.0]
+                #     ), stage_name)
+
             elif stage_name == 'LOWERING_TO_OBJECT':
+                self.get_logger().info('>>> Entering LOWERING — calling cartesian move_to_pose')
+                # time.sleep(15.0)  # DEBUG use
+
+                pose = self.pre_grasp_ee_pose[0].pose
+
                 success = self._execute_motion(
                     lambda: self.moveit2.move_to_pose(
-                        position=[obj_pos.x, obj_pos.y, obj_pos.z],
-                        quat_xyzw=[obj_ori.x, obj_ori.y, obj_ori.z, obj_ori.w]
+                        position=[pose.position.x, pose.position.y, pose.position.z - self.safe_height],
+                        quat_xyzw=[pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w],
+                        cartesian=True, cartesian_fraction_threshold=0.95
                     ), stage_name)
+                
+
 
             elif stage_name == 'GRASPING':
                 gripper_goal = GripperCommand.Goal()
@@ -201,24 +228,33 @@ class PickPlaceController(Node):
                 continue
 
             elif stage_name == 'LIFTING':
+                self.get_logger().info('>>> Entering LIFTING — calling cartesian move_to_pose')
+
+                pose = self.pre_grasp_ee_pose[0].pose
+
                 success = self._execute_motion(
                     lambda: self.moveit2.move_to_pose(
-                        position=[obj_pos.x, obj_pos.y, obj_safe_z],
-                        quat_xyzw=[obj_ori.x, obj_ori.y, obj_ori.z, obj_ori.w]
+                        position=[pose.position.x, pose.position.y, pose.position.z],
+                        quat_xyzw=[pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w],
+                        cartesian=True, cartesian_fraction_threshold=0.95
                     ), stage_name)
-
+                
             elif stage_name == 'MOVING_TO_TARGET':
                 success = self._execute_motion(
                     lambda: self.moveit2.move_to_pose(
                         position=[tgt_pos.x, tgt_pos.y, tgt_safe_z],
                         quat_xyzw=[tgt_ori.x, tgt_ori.y, tgt_ori.z, tgt_ori.w]
                     ), stage_name)
+                if success:
+                    self.pre_place_ee_pose = self.moveit2.compute_fk(fk_link_names=['EE_robotiq_2f85'])
 
             elif stage_name == 'LOWERING_TO_TARGET':
+                pose = self.pre_place_ee_pose[0].pose
                 success = self._execute_motion(
                     lambda: self.moveit2.move_to_pose(
-                        position=[tgt_pos.x, tgt_pos.y, tgt_pos.z],
-                        quat_xyzw=[tgt_ori.x, tgt_ori.y, tgt_ori.z, tgt_ori.w]
+                        position=[pose.position.x, pose.position.y, pose.position.z - self.safe_height],
+                        quat_xyzw=[pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w],
+                        cartesian=True, cartesian_fraction_threshold=0.95
                     ), stage_name)
 
             elif stage_name == 'PLACING':
@@ -238,10 +274,12 @@ class PickPlaceController(Node):
                 continue
 
             elif stage_name == 'RETREATING':
+                pose = self.pre_place_ee_pose[0].pose  # reuse pre-place FK
                 success = self._execute_motion(
                     lambda: self.moveit2.move_to_pose(
-                        position=[tgt_pos.x, tgt_pos.y, tgt_safe_z],
-                        quat_xyzw=[tgt_ori.x, tgt_ori.y, tgt_ori.z, tgt_ori.w]
+                        position=[pose.position.x, pose.position.y, pose.position.z],
+                        quat_xyzw=[pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w],
+                        cartesian=True, cartesian_fraction_threshold=0.95
                     ), stage_name)
 
             elif stage_name == 'HOMING':
