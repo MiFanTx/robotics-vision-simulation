@@ -152,9 +152,10 @@ def generate_launch_description():
     }
 
     planning_pipelines = {
-        'planning_pipelines': ['ompl'],
+        'planning_pipelines': ['ompl', 'pilz_industrial_motion_planner'],
         'default_planning_pipeline': 'ompl',
         'ompl': load_yaml(sim_pkg, 'config/ompl_planning.yaml'),
+        'pilz_industrial_motion_planner': load_yaml(sim_pkg, 'config/pilz_planning.yaml'),
     }
 
     move_group_node = Node(

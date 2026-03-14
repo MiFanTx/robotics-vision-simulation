@@ -26,6 +26,7 @@ class PickPlaceController(Node):
 
         self.safe_height = 0.05 # the stopping distance above the object in meter
 
+        # Separate Callback Group for action and client
         self.action_cb_group = ReentrantCallbackGroup()
         self.client_cb_group = ReentrantCallbackGroup()
 
@@ -47,13 +48,16 @@ class PickPlaceController(Node):
             use_move_group_action=True
         )
 
+        # MoveIt2 Configuration
         self.moveit2.max_velocity = 0.5
         self.moveit2.max_acceleration = 0.5
+
         self.moveit2.planner_id = 'RRTConnect'
         self.moveit2.pipeline_id = 'ompl'
+
         self.moveit2.allowed_planning_time = 5.0
         
-
+        # Initialise Clients
         self.gripper_client = ActionClient(
             self,
             GripperCommand,
@@ -72,8 +76,8 @@ class PickPlaceController(Node):
             '/DETACHLINK',
             callback_group=self.client_cb_group
         )
-        self.joint_state_ready = False
 
+        # Joint State
         self.joint_state_sub = self.create_subscription(
             JointState,
             '/joint_states',
@@ -81,6 +85,9 @@ class PickPlaceController(Node):
             10,
             callback_group=self.action_cb_group
         )
+
+        self.joint_state_ready = False
+
 
     def _joint_state_cb(self, msg):
         if not self.joint_state_ready and len(msg.position) > 0:
@@ -172,10 +179,6 @@ class PickPlaceController(Node):
 
             # --- MOTION STAGES ---
             if stage_name == 'MOVING_TO_OBJECT':
-                self.get_logger().info(f'Planning pose: frame={goal_handle.request.object_pose.header.frame_id}, pos=[{obj_pos.x}, {obj_pos.y}, {obj_pos.z}]')
-                
-                # self.moveit2.set_path_joint_constraint(joint_positions=[-1.5707], joint_names=['elbow_joint'], tolerance=1.5)
-                # self.moveit2.set_path_joint_constraint(joint_positions=[-1.5707], joint_names=['wrist_1_joint'], tolerance=0.5)
 
                 success = self._execute_motion(
                     lambda: self.moveit2.move_to_pose(
@@ -183,22 +186,11 @@ class PickPlaceController(Node):
                         quat_xyzw=[obj_ori.x, obj_ori.y, obj_ori.z, obj_ori.w]
                     ), stage_name)
 
-                # self.moveit2.clear_path_constraints()
-
                 if success:
                     # Get actual EE pose after arriving
                     self.pre_grasp_ee_pose = self.moveit2.compute_fk(fk_link_names=['EE_robotiq_2f85'])
-                    if self.pre_grasp_ee_pose:
-                        self.get_logger().info(f'>>> Actual EE pose: {self.pre_grasp_ee_pose[0].pose.position}')
-
-                # success = self._execute_motion(
-                #     lambda: self.moveit2.move_to_configuration(
-                #         joint_positions=[0.2, -1.0, 1.0, -1.5, -1.6, 0.0]
-                #     ), stage_name)
 
             elif stage_name == 'LOWERING_TO_OBJECT':
-                self.get_logger().info('>>> Entering LOWERING — calling cartesian move_to_pose')
-                # time.sleep(15.0)  # DEBUG use
 
                 pose = self.pre_grasp_ee_pose[0].pose
 
@@ -209,8 +201,6 @@ class PickPlaceController(Node):
                         cartesian=True, cartesian_fraction_threshold=0.95
                     ), stage_name)
                 
-
-
             elif stage_name == 'GRASPING':
                 gripper_goal = GripperCommand.Goal()
                 gripper_goal.command.position = 0.0
@@ -228,7 +218,6 @@ class PickPlaceController(Node):
                 continue
 
             elif stage_name == 'LIFTING':
-                self.get_logger().info('>>> Entering LIFTING — calling cartesian move_to_pose')
 
                 pose = self.pre_grasp_ee_pose[0].pose
 
