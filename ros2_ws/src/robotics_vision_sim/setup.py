@@ -20,6 +20,9 @@ setup(
         (os.path.join('share', package_name, 'meshes', 'robotiq_2f85'), glob('meshes/robotiq_2f85/*.stl')),
         (os.path.join('share', package_name, 'meshes', 'robotiq_2f85', 'visual'), glob('meshes/robotiq_2f85/visual/*')),
         (os.path.join('share', package_name, 'meshes', 'robotiq_2f85', 'collision'), glob('meshes/robotiq_2f85/collision/*')),
+        (os.path.join('share', package_name, 'models', 'aruco_box'), glob('models/aruco_box/*.*')),
+        (os.path.join('share', package_name, 'models', 'aruco_box', 'materials', 'textures'), glob('models/aruco_box/materials/textures/*')),
+        (os.path.join('share', package_name, 'models', 'aruco_box', 'materials', 'scripts'), glob('models/aruco_box/materials/scripts/*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -32,6 +35,7 @@ setup(
         'console_scripts': [
             'camera_tf_broadcaster = robotics_vision_sim.nodes.camera_tf_broadcaster:main',
             'pick_place_controller = robotics_vision_sim.nodes.pick_place_controller:main',
+            'vision_pipeline_node = robotics_vision_sim.nodes.vision_pipeline_node:main',
         ],
     },
 )

@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<sdf version="1.6">
+  <model name="aruco_box">
+    <static>false</static>
+    <link name="aruco_box">
+      <inertial>
+        <mass>0.1</mass>
+        <inertia>
+          <ixx>0.000004167</ixx>
+          <iyy>0.000004167</iyy>
+          <izz>0.000004167</izz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry>
+          <box><size>0.05 0.05 0.05</size></box>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <box><size>0.05 0.05 0.05</size></box>
+        </geometry>
+        <material>
+          <script>
+            <uri>model://aruco_box/materials/scripts/aruco_box.material</uri>
+            <name>ArucoBox/Marker</name>
+          </script>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

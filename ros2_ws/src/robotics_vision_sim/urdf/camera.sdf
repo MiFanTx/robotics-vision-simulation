@@ -1,7 +1,7 @@
 <?xml version="1.0" ?>
 <sdf version="1.6">
   <model name="camera_model">
-    <pose>0.5 0.5 1.0 0 0 0</pose>
+    <pose>0.4 0.2 0.8 0 1.5707 0</pose>
     <static>true</static>
     <link name="camera_link">
       <sensor type="depth" name="depth_camera">
@@ -10,8 +10,8 @@
         <camera>
           <horizontal_fov>1.047</horizontal_fov>
           <image>
-            <width>640</width>
-            <height>480</height>
+            <width>1280</width>
+            <height>960</height>
             <format>B8G8R8</format>
           </image>
           <depth_camera></depth_camera>

@@ -20,13 +20,13 @@ class CameraTFBroadcaster (Node):
         t.header.frame_id = 'world'
         t.child_frame_id = 'camera_link'
 
-        t.transform.translation.x = 0.5
-        t.transform.translation.y = 0.5
-        t.transform.translation.z = 1.0
+        t.transform.translation.x = 0.4
+        t.transform.translation.y = 0.2
+        t.transform.translation.z = 0.8
 
-        t.transform.rotation.w = 1.0
+        t.transform.rotation.w = 0.7071
         t.transform.rotation.x = 0.0
-        t.transform.rotation.y = 0.0
+        t.transform.rotation.y = 0.7071
         t.transform.rotation.z = 0.0
 
         self.tf_broadcaster.sendTransform(t)

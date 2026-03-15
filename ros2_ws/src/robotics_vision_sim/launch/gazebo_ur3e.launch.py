@@ -19,6 +19,9 @@ def load_yaml(package_path, file_path):
     absolute_path = os.path.join(package_path, file_path)
     return yaml.safe_load(open(absolute_path))
 
+os.environ['GAZEBO_MODEL_PATH'] = os.path.join(
+    get_package_share_directory('robotics_vision_sim'), 'models'
+) + ':' + os.environ.get('GAZEBO_MODEL_PATH', '')
 
 def generate_launch_description():
     # Get URDF via xacro
@@ -62,8 +65,13 @@ def generate_launch_description():
         parameters=[{'use_sim_time': True}]
     )
 
-    # CHANGE 1: use_sim_time: True — matches IFRA-Cranfield simulation.launch.py exactly.
-    # This ensures static TF transforms are published with sim timestamps, not wall clock t=0.
+    vision_pipeline_node = Node(
+        package='robotics_vision_sim',
+        executable='vision_pipeline_node',
+        output='screen',
+        parameters=[{'use_sim_time': True}]
+    )
+
     robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -152,10 +160,9 @@ def generate_launch_description():
     }
 
     planning_pipelines = {
-        'planning_pipelines': ['ompl', 'pilz_industrial_motion_planner'],
+        'planning_pipelines': ['ompl'],
         'default_planning_pipeline': 'ompl',
         'ompl': load_yaml(sim_pkg, 'config/ompl_planning.yaml'),
-        'pilz_industrial_motion_planner': load_yaml(sim_pkg, 'config/pilz_planning.yaml'),
     }
 
     move_group_node = Node(
@@ -182,6 +189,7 @@ def generate_launch_description():
         spawn_entity,
         spawn_camera,
         camera_tf_broadcaster,
+        vision_pipeline_node,
         pick_place_controller,
 
         # CHANGE 2: Event-handler controller spawning — matches IFRA-Cranfield simulation.launch.py.
