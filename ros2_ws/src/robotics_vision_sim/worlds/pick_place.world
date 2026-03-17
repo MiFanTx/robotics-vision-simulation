@@ -26,7 +26,7 @@
 
     <include>
       <uri>model://aruco_box</uri>
-      <name>pick_box</name>
+      <name>aruco_box</name>
       <pose>0.4 0.2 0.025 0 0 0</pose>
     </include>
 

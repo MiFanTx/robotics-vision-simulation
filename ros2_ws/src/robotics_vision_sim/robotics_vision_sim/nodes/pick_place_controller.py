@@ -21,6 +21,7 @@ class PickPlaceController(Node):
     def __init__(self):
         super().__init__('pick_place_controller')
 
+        # Pose for Cartesian movement
         self.pre_grasp_ee_pose = None
         self.pre_place_ee_pose = None
 
@@ -111,6 +112,11 @@ class PickPlaceController(Node):
     def execute_callback(self, goal_handle:ServerGoalHandle):
         self.get_logger().info('Pick-place goal received')
 
+        # Initialise 
+        feedback = PickPlace.Feedback()
+        result = PickPlace.Result()
+        goal = goal_handle.request
+
         # Wait for joint states to be valid
         timeout = 10.0
         start = time.time()
@@ -121,12 +127,6 @@ class PickPlaceController(Node):
                 goal_handle.abort()
                 return result
             time.sleep(0.1)
-        
-        # Initialise 
-        feedback = PickPlace.Feedback()
-        result = PickPlace.Result()
-        start_time = time.time()
-        goal = goal_handle.request
 
         # Check if the object is in valid frame
         if goal.object_pose.header.frame_id != 'base_link':
@@ -134,7 +134,6 @@ class PickPlaceController(Node):
             result.message = f'Expected pose in base link, got {goal.object_pose.header.frame_id}'
             goal_handle.abort()
             return result
-
 
         stages = [
             ('MOVING_TO_OBJECT',   'Moving to pick position...'),
@@ -156,8 +155,26 @@ class PickPlaceController(Node):
         tgt_pos = goal.target_pose.pose.position
         tgt_ori = goal.target_pose.pose.orientation
 
+        # Fix gripper orientation to always pointing down
+        obj_ori.x = 0.0
+        obj_ori.y = 0.707
+        obj_ori.z = 0.0
+        obj_ori.w = 0.707
+
+        GRASP_Z_OFFSET = -0.04  # 4cm below marker surface
+        obj_pos.z += GRASP_Z_OFFSET
+
         obj_safe_z = obj_pos.z + self.safe_height
         tgt_safe_z = tgt_pos.z + self.safe_height
+
+        # self.get_logger().info(
+        #     f'Object pose: x={obj_pos.x:.3f}, y={obj_pos.y:.3f}, z={obj_pos.z:.3f}'
+        # )
+        # self.get_logger().info(
+        #     f'Approach z: {obj_pos.z + self.safe_height:.3f}, Grasp z: {obj_pos.z:.3f}'
+        # )
+
+        start_time = time.time()
 
         # loop through the stages
         for step, (stage_name, status_msg) in enumerate(stages, start=1):
@@ -167,6 +184,7 @@ class PickPlaceController(Node):
             feedback.status_message = f'[{step}/{total_stages}] {status_msg}'
             goal_handle.publish_feedback(feedback)
             self.get_logger().info(f'  [{step}/{total_stages}] {stage_name}: {status_msg}')
+            success = False
 
             # check for cancel request
             if goal_handle.is_cancel_requested:
@@ -189,6 +207,10 @@ class PickPlaceController(Node):
                 if success:
                     # Get actual EE pose after arriving
                     self.pre_grasp_ee_pose = self.moveit2.compute_fk(fk_link_names=['EE_robotiq_2f85'])
+                    fk = self.pre_grasp_ee_pose[0].pose
+                    self.get_logger().info(
+                        f'Pre-grasp EE: x={fk.position.x:.3f}, y={fk.position.y:.3f}, z={fk.position.z:.3f}'
+                    )
 
             elif stage_name == 'LOWERING_TO_OBJECT':
 
@@ -202,6 +224,7 @@ class PickPlaceController(Node):
                     ), stage_name)
                 
             elif stage_name == 'GRASPING':
+                self.get_logger().info(f'Attaching: model={goal.object_id}, link={goal.object_id}')
                 gripper_goal = GripperCommand.Goal()
                 gripper_goal.command.position = 0.0
                 gripper_goal.command.max_effort = 10.0
@@ -215,6 +238,8 @@ class PickPlaceController(Node):
                 attach_req.link2_name = goal.object_id
                 future = self.attach_client.call_async(attach_req)
                 rclpy.spin_until_future_complete(self, future)
+                attach_result = future.result()
+                self.get_logger().info(f'Attach result: {attach_result}')
                 continue
 
             elif stage_name == 'LIFTING':

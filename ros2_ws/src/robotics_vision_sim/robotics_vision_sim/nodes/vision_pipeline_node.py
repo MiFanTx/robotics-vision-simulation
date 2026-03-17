@@ -95,9 +95,6 @@ class VisionPipelineNode(Node):
 
                 break
 
-        pass
-
-
 def main(args=None):
     rclpy.init(args=args)
     node = VisionPipelineNode()

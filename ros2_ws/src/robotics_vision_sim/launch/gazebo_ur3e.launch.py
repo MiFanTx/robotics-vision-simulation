@@ -65,12 +65,28 @@ def generate_launch_description():
         parameters=[{'use_sim_time': True}]
     )
 
+    task_manager_node = Node(
+        package='robotics_vision_sim',
+        executable='task_manager_node',
+        output='screen',
+        parameters=[{'use_sim_time': True}]
+    )
+
+    # Vision pipeline
     vision_pipeline_node = Node(
         package='robotics_vision_sim',
         executable='vision_pipeline_node',
         output='screen',
         parameters=[{'use_sim_time': True}]
     )
+
+    pose_estimation_node = Node(
+        package='robotics_vision_sim',
+        executable='pose_estimation_node',
+        output='screen',
+        parameters=[{'use_sim_time': True}]
+    )
+
 
     robot_state_publisher = Node(
         package='robot_state_publisher',
@@ -190,6 +206,8 @@ def generate_launch_description():
         spawn_camera,
         camera_tf_broadcaster,
         vision_pipeline_node,
+        pose_estimation_node,
+        task_manager_node,
         pick_place_controller,
 
         # CHANGE 2: Event-handler controller spawning — matches IFRA-Cranfield simulation.launch.py.

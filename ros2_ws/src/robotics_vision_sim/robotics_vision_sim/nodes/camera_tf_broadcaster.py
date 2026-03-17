@@ -24,10 +24,11 @@ class CameraTFBroadcaster (Node):
         t.transform.translation.y = 0.2
         t.transform.translation.z = 0.8
 
-        t.transform.rotation.w = 0.7071
-        t.transform.rotation.x = 0.0
-        t.transform.rotation.y = 0.7071
+        t.transform.rotation.x = 1.0
+        t.transform.rotation.y = 0.0
         t.transform.rotation.z = 0.0
+        t.transform.rotation.w = 0.0
+
 
         self.tf_broadcaster.sendTransform(t)
 

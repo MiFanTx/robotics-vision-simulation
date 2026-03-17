@@ -13,6 +13,7 @@ find_package(action_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/PickPlace.action"
+  "action/RunTask.action"
   DEPENDENCIES geometry_msgs action_msgs
 )
 

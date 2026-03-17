@@ -1,0 +1,19 @@
+# RunTask.action
+# Goal fields — what the caller sends
+string object_id
+string target_id
+---
+# Result fields — what comes back when done
+uint8 status
+string message
+float64 total_time_sec
+
+uint8 STATUS_SUCCESS = 0
+uint8 STATUS_FAILURE = 1
+uint8 STATUS_ABORTED = 2
+uint8 STATUS_CANCELED = 3
+
+---
+# Feedback fields — what gets published during execution
+string current_stage
+string status_message

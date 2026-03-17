@@ -36,6 +36,8 @@ setup(
             'camera_tf_broadcaster = robotics_vision_sim.nodes.camera_tf_broadcaster:main',
             'pick_place_controller = robotics_vision_sim.nodes.pick_place_controller:main',
             'vision_pipeline_node = robotics_vision_sim.nodes.vision_pipeline_node:main',
+            'pose_estimation_node = robotics_vision_sim.nodes.pose_estimation_node:main',
+            'task_manager_node = robotics_vision_sim.nodes.task_manager_node:main',
         ],
     },
 )

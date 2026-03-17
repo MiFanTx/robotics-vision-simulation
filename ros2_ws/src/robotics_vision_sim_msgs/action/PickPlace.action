@@ -2,7 +2,7 @@
 string object_id
 geometry_msgs/PoseStamped object_pose
 geometry_msgs/PoseStamped target_pose
-float64 gripper_width
+float64 gripper_width # come from pose estimation in the future
 
 ---
 # Result - what's returned when complete
@@ -19,5 +19,5 @@ uint8 STATUS_CANCELED = 3
 # Feedback - what's sent during execution
 
 string current_stage
-float32 progress_percent
+float32 progress_percent # remove in the future
 string status_message
