@@ -174,6 +174,23 @@ pose estimate downstream.
 
 ---
 
+### 13 — `ur_moveit_config` RViz spams errors; it doesn't know the Robotiq gripper
+*2026-06-01*
+
+Launching RViz via `ros2 launch ur_moveit_config ur_moveit.launch.py ur_type:=ur3e launch_rviz:=true`
+floods the console with errors, because that stock UR MoveIt config describes only the arm — it has
+no knowledge of the Robotiq 2F-85 gripper this project adds. RViz is therefore **skipped**; motion
+quality is judged by watching the arm move directly in Gazebo.
+
+- Don't reach for the stock `ur_moveit_config` RViz to debug motion — it's not gripper-aware here.
+- If interactive/visual planning is ever needed, build a MoveIt config that includes the combined
+  UR3e + Robotiq 2F-85 description (out of scope for now — see `docs/backlog.md`).
+
+**Principle:** a stock vendor MoveIt config matches the vendor's robot, not your modified one. Adding an
+end-effector means the planning/visualization config must know about it too, or it errors on the missing links.
+
+---
+
 ### TF2 note — prefer the single-call transform API
 
 Not a bug, but a standing convention: use `tf_buffer.transform(msg, 'base_link')` as one call

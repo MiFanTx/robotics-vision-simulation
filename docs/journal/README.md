@@ -14,4 +14,5 @@ Bugs and mistakes go in `../gotchas.md`, not here.
 ## Index
 
 <!-- Add a line per session, newest at top -->
+- [2026-06-01 — RRTConnect vs PILZ](2026-06-01-rrtconnect-vs-pilz.md) — re-oriented, confirmed pipeline runs end-to-end, diagnosed inefficient free-space motion as RRTConnect, chose PILZ PTP as the fix.
 - _(migrate dated entries from the old Notion "ROS Learning Journal" here)_

@@ -27,7 +27,7 @@ Then a quick health check: `python3 -c "import torch; print(torch.cuda.is_availa
 cd ~/Workspace/robotics-vision-simulation/ros2_ws
 colcon build --packages-select <pkg>        # or just: colcon build
 source install/setup.bash
-ros2 launch robotics_vision_sim <launch_file>   # TODO: fill exact launch file
+ros2 launch robotics_vision_sim gazebo_ur3e.launch.py
 ```
 
 Run one pick-and-place:

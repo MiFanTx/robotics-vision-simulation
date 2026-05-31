@@ -28,8 +28,9 @@ ros2 action send_goal --feedback /run_task robotics_vision_sim_msgs/action/RunTa
 
 Pipeline works but paths are non-intuitive. Fix before recording demos.
 
-- [ ] **Cartesian planning for straight-line stages** (LOWER, LIFT, RETREAT) — `cartesian=True` with a reliable pre-grasp config; avoid wrist wrapping. (See gotcha #2.)
-- [ ] **Refine pre-grasp joint config** `[0.1, -0.8, 0.75, -1.4, -1.6, 0.0]` via RViz Motion Planning panel — gripper above object, no wrapped wrist.
+- [x] **Cartesian planning for straight-line stages** (LOWER, LIFT, LOWER_TO_TARGET) — `cartesian=True, fraction_threshold=0.95` using FK pre-grasp pose. Confirmed straight-line motion in end-to-end test (2026-06-01).
+- [x] **Pre-grasp joint config** `[0.1, -0.8, 0.75, -1.4, -1.6, 0.0]` — found manually (gripper directly above box); straight-line stages show no wrist wrap. Analytical computation from object pose is backlog. (RViz tuning N/A — `ur_moveit_config` doesn't know the Robotiq gripper, so RViz is skipped.)
+- [ ] **Free-space moves via PILZ PTP** (`MOVING_TO_OBJECT`, `MOVING_TO_TARGET`, `HOMING` — stages 1/5/9) — replace RRTConnect, whose first-found sampled paths swing inefficiently. PILZ PTP gives deterministic, predictable point-to-point motion (industrial standard). **← NEXT.** First step: verify the `pilz_industrial_motion_planner` pipeline is loaded in `move_group` before changing code. (Pulled forward from Phase 6.)
 - [ ] **Reliable repeat execution** — 5 cycles without failure.
 - [ ] **Defensive `success = False`** at top of stage loop to prevent stale reads.
 

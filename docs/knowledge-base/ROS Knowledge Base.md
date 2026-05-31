@@ -1,0 +1,32 @@
+---
+tags: [ros2, moc, index]
+---
+
+# ROS Knowledge Base
+
+Map of Content (MOC) for my ROS2 / robotics learning. Each linked note is **atomic** — one
+concept, written for a future-me who forgot. Built from things learned while building the
+[vision-guided pick-and-place project](../../AGENTS.md). Open this folder as an Obsidian vault.
+
+> Convention: one concept per note · link liberally with `[[wikilinks]]` · lead with *what it is*
+> and *why it exists*, then *how it works*, then *how it showed up in my project*.
+
+## Motion planning
+- [[MoveIt2 and Planning Pipelines]] — the framework + how it picks a planner
+- [[Sampling-Based Motion Planning]] — RRT, RRTConnect, RRT\* (the OMPL family)
+- [[PILZ Industrial Motion Planner]] — deterministic PTP / LIN / CIRC
+- [[Cartesian Path Planning]] — straight-line end-effector motion
+
+## Perception
+- [[ArUco Marker Detection]] — fiducial markers, two-stage detection, pose estimation
+
+## ROS2 core
+- [[ROS2 Workspaces and Sourcing]] — colcon, overlays, why you `source` every terminal
+- [[ROS2 Actions]] — long-running goals, the async client pattern
+- [[ROS2 Introspection and Debugging Tools]] — the CLI tools for seeing what's running
+
+## How these connect
+The project pipeline is: a camera frame → [[ArUco Marker Detection]] → an object pose → a
+[[ROS2 Actions|RunTask action]] → a state machine that plans motion with [[MoveIt2 and Planning Pipelines|MoveIt2]],
+using [[Cartesian Path Planning]] for straight descents and (planned) [[PILZ Industrial Motion Planner|PILZ PTP]]
+for free-space moves instead of [[Sampling-Based Motion Planning|RRTConnect]].

@@ -48,8 +48,8 @@ Python 3.10 (ament_python).
 cd ~/Workspace/robotics-vision-simulation/ros2_ws
 colcon build --packages-select <pkg> && source install/setup.bash
 
-# launch the system
-ros2 launch robotics_vision_sim <launch_file>   # TODO: fill exact launch file name
+# launch the system (run from ros2_ws with install/setup.bash sourced)
+ros2 launch robotics_vision_sim gazebo_ur3e.launch.py
 
 # run one full pick-and-place
 ros2 action send_goal --feedback /run_task robotics_vision_sim_msgs/action/RunTask \
@@ -80,6 +80,7 @@ ros2 node list / ros2 topic list / ros2 topic echo /vision/object_pose
 | `docs/backlog.md` | Out-of-scope enhancements (living) |
 | `docs/gotchas.md` | Bugs & hard-won rules — read before debugging |
 | `docs/journal/` | Dated session logs |
+| `docs/knowledge-base/` | Obsidian vault of ROS concept notes (learning record) — start at `ROS Knowledge Base.md` |
 | `docs/system-setup.md` | Machine, drivers, env reference |
 | `docs/workflow.md` | Daily start-up / remote-access workflow |
 
