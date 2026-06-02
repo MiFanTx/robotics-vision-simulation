@@ -14,8 +14,9 @@ concept, written for a future-me who forgot. Built from things learned while bui
 ## Motion planning
 - [[MoveIt2 and Planning Pipelines]] — the framework + how it picks a planner
 - [[Sampling-Based Motion Planning]] — RRT, RRTConnect, RRT\* (the OMPL family)
-- [[PILZ Industrial Motion Planner]] — deterministic PTP / LIN / CIRC
+- [[PILZ Industrial Motion Planner]] — deterministic PTP / LIN / CIRC (and why it can't dodge obstacles)
 - [[Cartesian Path Planning]] — straight-line end-effector motion
+- [[Inverse Kinematics]] — pose → joint angles; KDL's seed/budget fragility, TRAC-IK
 
 ## Perception
 - [[ArUco Marker Detection]] — fiducial markers, two-stage detection, pose estimation
@@ -28,5 +29,7 @@ concept, written for a future-me who forgot. Built from things learned while bui
 ## How these connect
 The project pipeline is: a camera frame → [[ArUco Marker Detection]] → an object pose → a
 [[ROS2 Actions|RunTask action]] → a state machine that plans motion with [[MoveIt2 and Planning Pipelines|MoveIt2]],
-using [[Cartesian Path Planning]] for straight descents and (planned) [[PILZ Industrial Motion Planner|PILZ PTP]]
-for free-space moves instead of [[Sampling-Based Motion Planning|RRTConnect]].
+using [[Cartesian Path Planning]] for straight descents. Free-space moves are mid-migration from
+[[Sampling-Based Motion Planning|RRTConnect]] to [[PILZ Industrial Motion Planner|PILZ PTP]] — which
+needs an [[Inverse Kinematics]] joint goal and, because it can't dodge obstacles, a via-point or hybrid
+plan for the adaptive reach (see the PILZ note's status).

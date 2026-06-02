@@ -53,8 +53,11 @@ class PickPlaceController(Node):
         self.moveit2.max_velocity = 0.5
         self.moveit2.max_acceleration = 0.5
 
-        self.moveit2.planner_id = 'RRTConnect'
-        self.moveit2.pipeline_id = 'ompl'
+        # self.moveit2.planner_id = 'RRTConnect'
+        # self.moveit2.pipeline_id = 'ompl'
+
+        self.moveit2.planner_id = 'PTP'
+        self.moveit2.pipeline_id = 'pilz_industrial_motion_planner'
 
         self.moveit2.allowed_planning_time = 5.0
         
@@ -94,7 +97,6 @@ class PickPlaceController(Node):
         if not self.joint_state_ready and len(msg.position) > 0:
             self.joint_state_ready = True
             self.get_logger().info('Joint states ready')
-
             self.get_logger().info('PickPlaceController ready')
 
 
@@ -197,20 +199,53 @@ class PickPlaceController(Node):
 
             # --- MOTION STAGES ---
             if stage_name == 'MOVING_TO_OBJECT':
+                # Resolve the above-object POSE -> a trusted JOINT config, then PILZ-PTP to it.
+                # (PILZ won't reroute around a self-collision, so we hand it a config we vet,
+                #  not a pose whose IK solution it picks at random.)
 
-                success = self._execute_motion(
-                    lambda: self.moveit2.move_to_pose(
-                        position=[obj_pos.x, obj_pos.y, obj_safe_z],
-                        quat_xyzw=[obj_ori.x, obj_ori.y, obj_ori.z, obj_ori.w]
-                    ), stage_name)
+                # Resolve the above-object POSE -> a trusted JOINT config via IK.
+                # Use the *_async service call + poll the future. Do NOT use the sync
+                # compute_ik(): it calls rclpy.spin_once(self._node) internally, which
+                # double-spins a node already driven by our MultiThreadedExecutor and
+                # crashes with a context race (AttributeError: __enter__).
+                ik_future = self.moveit2.compute_ik_async(
+                    position=[obj_pos.x, obj_pos.y, obj_safe_z],
+                    quat_xyzw=[obj_ori.x, obj_ori.y, obj_ori.z, obj_ori.w],
+                    start_joint_state=[0.1, -0.8, 0.75, -1.4, -1.6, 0.0],   # un-folded seed
+                )
 
-                if success:
-                    # Get actual EE pose after arriving
-                    self.pre_grasp_ee_pose = self.moveit2.compute_fk(fk_link_names=['EE_robotiq_2f85'])
-                    fk = self.pre_grasp_ee_pose[0].pose
-                    self.get_logger().info(
-                        f'Pre-grasp EE: x={fk.position.x:.3f}, y={fk.position.y:.3f}, z={fk.position.z:.3f}'
-                    )
+                target_config = None
+                start_time_ik = time.time()
+                if ik_future is not None:
+                    while not ik_future.done():
+                        if time.time() - start_time_ik > 5.0:
+                            break
+                        time.sleep(0.05)
+                    
+                    target_config = self.moveit2.get_compute_ik_result(ik_future)
+
+                if target_config is None:
+                    self.get_logger().info(f'Failed to compute IK at {stage_name}')
+                    success = False
+                else:
+                    
+                    # IK returns a full-robot JointState (arm + gripper joints). Pull out
+                    # the 6 arm joints by name, in the planning group's order, for the PTP
+                    # joint goal — slicing [:6] is unsafe because IK's joint order isn't ours.
+                    name_to_pos = dict(zip(target_config.name, target_config.position))
+                    arm_positions = [name_to_pos[j] for j in self.moveit2.joint_names]
+
+                    success = self._execute_motion(
+                        lambda: self.moveit2.move_to_configuration(arm_positions),
+                        stage_name)
+
+                    if success:
+                        # Get actual EE pose after arriving
+                        self.pre_grasp_ee_pose = self.moveit2.compute_fk(fk_link_names=['EE_robotiq_2f85'])
+                        fk = self.pre_grasp_ee_pose[0].pose
+                        self.get_logger().info(
+                            f'Pre-grasp EE: x={fk.position.x:.3f}, y={fk.position.y:.3f}, z={fk.position.z:.3f}'
+                        )
 
             elif stage_name == 'LOWERING_TO_OBJECT':
 

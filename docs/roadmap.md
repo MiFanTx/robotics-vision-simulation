@@ -30,9 +30,10 @@ Pipeline works but paths are non-intuitive. Fix before recording demos.
 
 - [x] **Cartesian planning for straight-line stages** (LOWER, LIFT, LOWER_TO_TARGET) — `cartesian=True, fraction_threshold=0.95` using FK pre-grasp pose. Confirmed straight-line motion in end-to-end test (2026-06-01).
 - [x] **Pre-grasp joint config** `[0.1, -0.8, 0.75, -1.4, -1.6, 0.0]` — found manually (gripper directly above box); straight-line stages show no wrist wrap. Analytical computation from object pose is backlog. (RViz tuning N/A — `ur_moveit_config` doesn't know the Robotiq gripper, so RViz is skipped.)
-- [ ] **Free-space moves via PILZ PTP** (`MOVING_TO_OBJECT`, `MOVING_TO_TARGET`, `HOMING` — stages 1/5/9) — replace RRTConnect, whose first-found sampled paths swing inefficiently. PILZ PTP gives deterministic, predictable point-to-point motion (industrial standard). **← NEXT.** First step: verify the `pilz_industrial_motion_planner` pipeline is loaded in `move_group` before changing code. (Pulled forward from Phase 6.)
+- [~] **Free-space moves via PILZ PTP** (`MOVING_TO_OBJECT`, `MOVING_TO_TARGET`, `HOMING` — stages 1/5/9) — pulled forward from Phase 6. **Plumbing done, blocked on an architecture choice (2026-06-03).** PILZ pipeline is registered in `gazebo_ur3e.launch.py` and loaded in `move_group` (verified); controller default switched to `pilz_industrial_motion_planner` / `PTP`; `MOVING_TO_OBJECT` rebuilt to resolve the pose to a joint config via async IK, then PTP to it; KDL budget raised so IK solves. **Blocker:** PILZ PTP has no collision avoidance, so the straight-line reach from home to the (low) pick config dips the arm through `ground_plane` and is rejected; raising the hover target instead breaks IK (seed/basin coupling). See gotchas #14–17 and the 2026-06-03 journal.
+  - **← NEXT: pick the fix.** Either **(A) taught via-point** — PTP home → fixed high "ready" config (verified clear) → short Cartesian descent (highest portfolio value), or **(B) hybrid** — OMPL for the gross adaptive reach, PILZ PTP for `HOMING`/taught-config moves only. TRAC-IK (Phase 6) would also de-risk the IK fragility.
 - [ ] **Reliable repeat execution** — 5 cycles without failure.
-- [ ] **Defensive `success = False`** at top of stage loop to prevent stale reads.
+- [x] **Defensive `success = False`** at top of stage loop to prevent stale reads — set at the top of each stage iteration (`pick_place_controller.py`); confirmed by the clean abort/safe-home on IK and planning failures (2026-06-03).
 
 ## Phase 3 — Demo & portfolio polish
 
@@ -83,7 +84,7 @@ Pipeline works but paths are non-intuitive. Fix before recording demos.
 | Vision pipeline | ✅ Done | ArUco, TF2 transform, `/vision/object_pose` |
 | Pick-place controller | ✅ Done | 9 stages, MoveIt2, gripper, attachment |
 | Task manager | ✅ Done | RunTask action, staleness check, feedback |
-| Motion quality | 🔧 In progress | RRTConnect paths non-intuitive |
+| Motion quality | 🔧 In progress | Cartesian stages done; PILZ PTP wired in but blocked — PTP can't avoid the floor on the adaptive reach. Choosing via-point vs hybrid. |
 | Demo recording | ❌ Not started | Blocked on motion quality |
 | README | ❌ Not started | |
 | Advanced features | ❌ Not started | |

@@ -16,8 +16,11 @@ built to show industry-standard ROS2/MoveIt2 skills. Simulation only, no hardwar
 ## Current state (keep this honest)
 
 Phase 1 (core pipeline) is **complete and runs end-to-end**. Phase 2 (motion quality) is
-**in progress** — RRTConnect paths are non-intuitive; the fix is Cartesian planning for the
-straight-line stages plus a refined pre-grasp joint config. See `docs/roadmap.md`.
+**in progress** — Cartesian straight-line stages are done. PILZ PTP is now wired in for the
+free-space stages (pipeline loaded, controller switched, `MOVING_TO_OBJECT` resolves the pose to a
+joint config via async IK) but is **blocked**: PTP has no collision avoidance, so the reach from home
+to the pick config dips through `ground_plane`. Open decision — taught via-point vs hybrid OMPL/PILZ.
+See `docs/roadmap.md`, the 2026-06-03 journal, and gotchas #14–17.
 
 Detection currently uses **ArUco markers** (prototype). Markerless detection is backlog, not done.
 

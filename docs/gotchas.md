@@ -191,6 +191,83 @@ end-effector means the planning/visualization config must know about it too, or 
 
 ---
 
+### 14 — PILZ PTP has no collision avoidance; fix the geometry, not the compute
+*2026-06-03*
+
+PILZ PTP is **not a search** — it computes one deterministic straight line in joint space from
+start config to goal config, then collision-checks it. If that straight line passes through the
+floor or a self-collision, `move_group` rejects it ("Computed path is not valid. Invalid states at
+index locations …"). Observed: a PTP reach from home to a low pick config swung the forearm/gripper
+through `ground_plane` at the *mid-path* waypoints (indices 33–67 of 80).
+
+- Giving PILZ more time or attempts buys **nothing** — it re-derives the identical line. (Contrast KDL
+  IK, rule 15, which *is* iterative and benefits from more time.)
+- OMPL planned the same reach fine for months because it *samples and routes around* obstacles.
+- Fix is **geometric**: change the path's endpoints/waypoints (a taught via-point that's verified
+  clear), or use a planner with avoidance (OMPL) for the gross reach. You cannot fix a mid-path
+  collision by moving an endpoint.
+
+**Principle:** PILZ PTP is for deterministic moves between *known, verified-clear* configs (home, via
+points). It is the wrong tool for an adaptive reach to a sensed pose that must avoid obstacles —
+that needs a sampling planner or taught waypoints.
+
+---
+
+### 15 — Single-shot KDL IK is seed- and budget-sensitive
+*2026-06-03*
+
+A direct `compute_ik` call uses KDL — a *local, iterative* solver — once, with the tiny default
+budget (`kinematics_solver_timeout: 0.005`, `attempts: 3`). It returned `NO_IK_SOLUTION` for a pose
+that `move_to_pose`+OMPL reached easily, because OMPL's goal sampler calls IK *many* times with
+random seeds while a single `compute_ik` gets one seed and ~5 ms.
+
+- Raising `kinematics_solver_timeout` to `0.05` and `attempts` to `10` in `kinematics.yaml` fixed the
+  low-pose case (config installs to share dir → `colcon build` + relaunch to take effect).
+- The seed (`start_joint_state`) must be in the **same IK basin** as the target. A seed tuned for a
+  low pick config caused `NO_IK_SOLUTION` when the target was raised 15 cm — the solution moved to a
+  different, more-upright basin the seed no longer pointed at. Fixed seed ↔ target height is a
+  fragile coupling.
+- Real fix is on the roadmap: replace KDL with TRAC-IK (Phase 6) — far less seed-sensitive.
+
+**Principle:** a single `compute_ik` is not the robust IK that a pose-goal planner gives you for free.
+With KDL, give it budget *and* a seed near the expected solution — or switch to TRAC-IK.
+
+---
+
+### 16 — pymoveit2 sync calls spin the node → crash inside a MultiThreadedExecutor
+*2026-06-03*
+
+`compute_ik()` (sync) and `wait_until_executed()` call `rclpy.spin_once(self._node)` internally. The
+controller already spins that node in a `MultiThreadedExecutor`, so two things spin one node → a
+context race that throws `AttributeError: __enter__` and kills the node. It only surfaced once a
+planning *failure* exercised the path that calls these.
+
+- Use the **async** API and poll the future yourself, letting the executor's threads service it:
+  `fut = moveit2.compute_ik_async(...)` → `while not fut.done(): sleep + timeout` → `get_compute_ik_result(fut)`.
+- Never call a library helper that spins the node from inside a callback already driven by your executor.
+
+**Principle:** in a `MultiThreadedExecutor` app, the executor owns spinning. Any API that spins the node
+itself will race — prefer its `*_async` form and poll.
+
+---
+
+### 17 — `compute_ik` returns a full-robot `JointState`; extract group joints by name
+*2026-06-03*
+
+The `JointState` from `compute_ik` carries **all** robot joints (arm + Robotiq gripper), not just the
+planning group. Handing its `.position` straight to `move_to_configuration` gave `IndexError: list
+index out of range` in `create_joint_constraints` (the position list was longer than the 6 arm
+joint names).
+
+- `JointState.name[]` and `.position[]` are parallel arrays; build `dict(zip(name, position))` and
+  pull out the group joints in order: `[name_to_pos[j] for j in moveit2.joint_names]`.
+- Do **not** slice `[:6]` — IK's joint order is not guaranteed to match the group's.
+
+**Principle:** a `JointState` is a name↔position map over the whole robot. Always index it by joint
+name for the subset you want, never by position.
+
+---
+
 ### TF2 note — prefer the single-call transform API
 
 Not a bug, but a standing convention: use `tf_buffer.transform(msg, 'base_link')` as one call

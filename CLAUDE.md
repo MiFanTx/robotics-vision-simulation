@@ -106,5 +106,7 @@ At session end, proactively offer (don't wait to be asked) to:
 - Log bugs and lessons learned to `docs/gotchas.md`
 - Write a dated session summary to `docs/journal/`
 - File out-of-scope enhancements to `docs/backlog.md`
+- Add/update atomic concept notes in the Obsidian knowledge base (`docs/knowledge-base/`) for any new
+  concepts covered, and update its index (`ROS Knowledge Base.md`)
 
 **Notion is no longer used — do not reference it, search it, or write to it.**
