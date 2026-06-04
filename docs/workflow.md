@@ -37,6 +37,21 @@ ros2 action send_goal --feedback /run_task robotics_vision_sim_msgs/action/RunTa
   "{object_id: 'aruco_box', target_id: 'default'}"
 ```
 
+## Reading logs (no copy-paste)
+
+Tee the launch so the full interleaved console is on disk; then Claude reads the file instead of you
+pasting:
+
+```bash
+ros2 launch robotics_vision_sim gazebo_ur3e.launch.py 2>&1 | tee /tmp/ros_run.log
+```
+
+- `/tmp/ros_run.log` — full console, overwritten each run.
+- `~/.ros/log/<node>_*.log` — per-node, complete, never truncated by scrollback.
+  `move_group_*.log` is the one for planning/collision detail. (`ls -t` finds the newest.)
+
+After a run, just say "ran it" and Claude reads the log.
+
 ## Git (stage by path — see gotcha #5)
 
 ```bash

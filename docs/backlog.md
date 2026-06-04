@@ -15,6 +15,13 @@ Enhancements out of scope for the current implementation but worth revisiting. A
 - **TRAC-IK / Bio-IK as KDL replacement** — KDL gives inconsistent configs near workspace boundaries (wrist flips, wrapped elbow). TRAC-IK (gradient descent + random restart) is more repeatable. Configure in `kinematics.yaml` under `ur_manipulator`. Prerequisite for PILZ. *(Roadmap Phase 6.)*
 - **PILZ Industrial Motion Planner** — after TRAC-IK, replace RRTConnect + `compute_cartesian_path` with PILZ PTP + LIN. Deterministic, same path every run — standard in real UR deployments. *(Roadmap Phase 6.)*
 - **Trajectory smoothing (intermediate)** — OMPL post-processing (shortcutting + time-parameterisation) improves RRTConnect quality with no planner change. Quick win if TRAC-IK + PILZ proves slow. *(Roadmap Phase 6.)*
+- **PILZ `cartesian_limits` config missing** — `move_group` logs `robot_description_planning.cartesian_limits.max_trans_vel is not set`. PTP ignores it (works anyway) but LIN needs it. Add a `config/pilz_cartesian_limits.yaml` (`max_trans_vel/acc/dec`, `max_rot_vel`) loaded under `robot_description_planning` in the launch.
+- **Stop spamming retries on deterministic planner failures** — `_execute_motion(max_retries=5)` re-runs PILZ PTP 5× on an identical, deterministically-failing path (#14) — pure log spam. Skip retries (or retry once) when the planner is PILZ.
+
+## ROS2 architecture (proper fixes)
+
+- **Replace `wait_until_executed()` with a non-spinning wait** — it `spin_once`s the node, corrupting `node.executor` (#18). The band-aids (poll helper + sync `compute_ik`) work, but the root fix is to poll `moveit2.query_state()` in `_execute_motion` so nothing ever spins the node inside the `MultiThreadedExecutor`. Kills the whole bug class.
+- **Eager client creation** — create all service/action clients (incl. pymoveit2's IK/FK) in `__init__`, never lazily inside callbacks, so they register before any spin (#18).
 
 ## System & infrastructure
 

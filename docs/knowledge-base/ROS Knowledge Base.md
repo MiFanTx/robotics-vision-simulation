@@ -24,6 +24,7 @@ concept, written for a future-me who forgot. Built from things learned while bui
 ## ROS2 core
 - [[ROS2 Workspaces and Sourcing]] — colcon, overlays, why you `source` every terminal
 - [[ROS2 Actions]] — long-running goals, the async client pattern
+- [[ROS2 Executors, Threads and Spinning]] — executor vs threads; why spinning the node inside its own executor corrupts it and hangs lazy clients
 - [[ROS2 Introspection and Debugging Tools]] — the CLI tools for seeing what's running
 
 ## How these connect

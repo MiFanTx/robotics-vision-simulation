@@ -61,5 +61,8 @@ Thumbs.db
 tmp/
 temp/
 
+# Run logs — regenerated each run; keep conclusions in the journal, not the raw log
+docs/journal/*.log
+
 # Depth Anything V2 (cloned repo)
 depth_anything_v2/

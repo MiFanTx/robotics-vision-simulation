@@ -53,11 +53,8 @@ class PickPlaceController(Node):
         self.moveit2.max_velocity = 0.5
         self.moveit2.max_acceleration = 0.5
 
-        # self.moveit2.planner_id = 'RRTConnect'
-        # self.moveit2.pipeline_id = 'ompl'
-
-        self.moveit2.planner_id = 'PTP'
-        self.moveit2.pipeline_id = 'pilz_industrial_motion_planner'
+        self.moveit2.planner_id = 'RRTConnect'
+        self.moveit2.pipeline_id = 'ompl'
 
         self.moveit2.allowed_planning_time = 5.0
         
@@ -97,6 +94,7 @@ class PickPlaceController(Node):
         if not self.joint_state_ready and len(msg.position) > 0:
             self.joint_state_ready = True
             self.get_logger().info('Joint states ready')
+
             self.get_logger().info('PickPlaceController ready')
 
 
@@ -110,6 +108,23 @@ class PickPlaceController(Node):
             )
             time.sleep(1.0)
         return False
+
+    def _wait_for_future(self, future, timeout=5.0):
+        """Wait for a future WITHOUT spinning the node.
+
+        Do NOT use rclpy.spin_until_future_complete(self, future) here: it grabs the
+        global SingleThreadedExecutor, reassigns node.executor to it, and never restores
+        it — silently breaking the next lazily-created client (the stage-5 compute_ik
+        hang we diagnosed). Polling is safe: our MultiThreadedExecutor's other threads
+        service the future while this one sleeps (needs >=2 threads; we run 4).
+        """
+        start = time.time()
+        # TODO: the same poll you wrote for IK in stage 5 —
+        while not future.done():
+            if time.time() - start > timeout: break
+            time.sleep(0.05)
+
+        return future.done()
 
     def execute_callback(self, goal_handle:ServerGoalHandle):
         self.get_logger().info('Pick-place goal received')
@@ -199,57 +214,24 @@ class PickPlaceController(Node):
 
             # --- MOTION STAGES ---
             if stage_name == 'MOVING_TO_OBJECT':
-                # Resolve the above-object POSE -> a trusted JOINT config, then PILZ-PTP to it.
-                # (PILZ won't reroute around a self-collision, so we hand it a config we vet,
-                #  not a pose whose IK solution it picks at random.)
 
-                # Resolve the above-object POSE -> a trusted JOINT config via IK.
-                # Use the *_async service call + poll the future. Do NOT use the sync
-                # compute_ik(): it calls rclpy.spin_once(self._node) internally, which
-                # double-spins a node already driven by our MultiThreadedExecutor and
-                # crashes with a context race (AttributeError: __enter__).
-                ik_future = self.moveit2.compute_ik_async(
-                    position=[obj_pos.x, obj_pos.y, obj_safe_z],
-                    quat_xyzw=[obj_ori.x, obj_ori.y, obj_ori.z, obj_ori.w],
-                    start_joint_state=[0.1, -0.8, 0.75, -1.4, -1.6, 0.0],   # un-folded seed
-                )
+                success = self._execute_motion(
+                    lambda: self.moveit2.move_to_pose(
+                        position=[obj_pos.x, obj_pos.y, obj_safe_z],
+                        quat_xyzw=[obj_ori.x, obj_ori.y, obj_ori.z, obj_ori.w]
+                    ), stage_name)
 
-                target_config = None
-                start_time_ik = time.time()
-                if ik_future is not None:
-                    while not ik_future.done():
-                        if time.time() - start_time_ik > 5.0:
-                            break
-                        time.sleep(0.05)
-                    
-                    target_config = self.moveit2.get_compute_ik_result(ik_future)
-
-                if target_config is None:
-                    self.get_logger().info(f'Failed to compute IK at {stage_name}')
-                    success = False
-                else:
-                    
-                    # IK returns a full-robot JointState (arm + gripper joints). Pull out
-                    # the 6 arm joints by name, in the planning group's order, for the PTP
-                    # joint goal — slicing [:6] is unsafe because IK's joint order isn't ours.
-                    name_to_pos = dict(zip(target_config.name, target_config.position))
-                    arm_positions = [name_to_pos[j] for j in self.moveit2.joint_names]
-
-                    success = self._execute_motion(
-                        lambda: self.moveit2.move_to_configuration(arm_positions),
-                        stage_name)
-
-                    if success:
-                        # Get actual EE pose after arriving
-                        self.pre_grasp_ee_pose = self.moveit2.compute_fk(fk_link_names=['EE_robotiq_2f85'])
-                        fk = self.pre_grasp_ee_pose[0].pose
-                        self.get_logger().info(
-                            f'Pre-grasp EE: x={fk.position.x:.3f}, y={fk.position.y:.3f}, z={fk.position.z:.3f}'
-                        )
+                if success:
+                    # Get actual EE pose after arriving
+                    self.pre_grasp_ee_pose = self.moveit2.compute_fk(fk_link_names=['EE_robotiq_2f85'])
+                    fk = self.pre_grasp_ee_pose[0].pose
+                    self.get_logger().info(
+                        f'Pre-grasp EE: x={fk.position.x:.3f}, y={fk.position.y:.3f}, z={fk.position.z:.3f}'
+                    )
 
             elif stage_name == 'LOWERING_TO_OBJECT':
 
-                pose = self.pre_grasp_ee_pose[0].pose
+                pose = self.pre_grasp_ee_pose[0].pose # QUESTION: why move to ee instead of object pose
 
                 success = self._execute_motion(
                     lambda: self.moveit2.move_to_pose(
@@ -264,7 +246,7 @@ class PickPlaceController(Node):
                 gripper_goal.command.position = 0.0
                 gripper_goal.command.max_effort = 10.0
                 future = self.gripper_client.send_goal_async(gripper_goal)
-                rclpy.spin_until_future_complete(self, future)
+                self._wait_for_future(future)
 
                 attach_req = AttachLink.Request()
                 attach_req.model1_name = 'ur3e'
@@ -272,7 +254,7 @@ class PickPlaceController(Node):
                 attach_req.model2_name = goal.object_id
                 attach_req.link2_name = goal.object_id
                 future = self.attach_client.call_async(attach_req)
-                rclpy.spin_until_future_complete(self, future)
+                self._wait_for_future(future)
                 attach_result = future.result()
                 self.get_logger().info(f'Attach result: {attach_result}')
                 continue
@@ -289,12 +271,67 @@ class PickPlaceController(Node):
                     ), stage_name)
                 
             elif stage_name == 'MOVING_TO_TARGET':
-                success = self._execute_motion(
-                    lambda: self.moveit2.move_to_pose(
-                        position=[tgt_pos.x, tgt_pos.y, tgt_safe_z],
-                        quat_xyzw=[tgt_ori.x, tgt_ori.y, tgt_ori.z, tgt_ori.w]
-                    ), stage_name)
+                # Stage 5 = move between KNOWN endpoints (holding the object -> fixed place
+                # target). THIS is PILZ PTP's job: deterministic, repeatable, near-straight.
+                # We resolve the above-target POSE -> a vetted JOINT config ourselves and PTP
+                # to the config, so PILZ can't substitute a wrist-flipped IK solution of its
+                # own. This is the stage that proves the IK + PILZ pipeline actually works.
+                #
+                # TODO(5a): switch the planner to PILZ PTP for this stage.
+                self.moveit2.pipeline_id = 'pilz_industrial_motion_planner'
+                self.moveit2.planner_id = 'PTP'
+                # Resolve the above-target POSE -> a joint config via the SYNC compute_ik
+                # (not async+poll). Same reason compute_fk works everywhere here: the sync
+                # call spin_once()s the node ITSELF to drive its own future, so it does NOT
+                # depend on the MTE seeing a cleanly-registered client — which the
+                # wait_until_executed spin corrupts. Safe in our serial single-callback flow
+                # (compute_fk proves it); gotcha #16's __enter__ crash needs concurrent
+                # spinning, which doesn't happen on this standalone call.
+                # The place is the pick rotated ~90deg about the base (same radius/height), so
+                # the clean solution is "start config, base pre-rotated by Δθ". From a cold
+                # seed KDL jumps basins (see the [IK] delta). So SEED it into the right basin:
+                # the current joints with shoulder_pan advanced by the pick->place Cartesian
+                # angle. KDL then converges to the near-start solution PTP can sweep cleanly.
+                # TODO(seed): build start_joint_state, then pass it to compute_ik below.
+                #   needs `import math` at the top of the file.
+                #   pick = self.pre_grasp_ee_pose[0].pose.position    # EE above the object
+                #   d_theta = math.atan2(tgt_pos.y, tgt_pos.x) - math.atan2(pick.y, pick.x)
+                #   cur = self.moveit2.joint_state
+                #   m = dict(zip(cur.name, cur.position))
+                #   seed = [m[j] for j in self.moveit2.joint_names]
+                #   seed[0] += d_theta                                # pre-rotate the base
+                target_config = self.moveit2.compute_ik(
+                    position=[tgt_pos.x, tgt_pos.y, tgt_safe_z],
+                    quat_xyzw=[tgt_ori.x, tgt_ori.y, tgt_ori.z, tgt_ori.w],
+                    # TODO(seed): start_joint_state=seed,
+                )
+
+                if target_config is None:
+                    self.get_logger().error(f'Failed to compute IK at {stage_name}')
+                    success = False
+                else:
+                    name_to_pose = dict(zip(target_config.name, target_config.position))
+                    arm_pos = [name_to_pose[i] for i in self.moveit2.joint_names]
+
+                    # DIAGNOSTIC: per-joint delta start(current) -> IK target. If this is a
+                    # clean base rotation, joint 0 (shoulder_pan) ~ +1.57 and the rest ~ 0.
+                    # Big deltas on the wrist/elbow joints = KDL picked a contorted basin,
+                    # which is what PTP sweeps through the upper arm. (remove after diagnosis)
+                    cur = self.moveit2.joint_state
+                    cur_map = dict(zip(cur.name, cur.position))
+                    cur_arm = [cur_map.get(j, float('nan')) for j in self.moveit2.joint_names]
+                    delta = [t - c for t, c in zip(arm_pos, cur_arm)]
+                    self.get_logger().warn(f'[IK] joints   ={self.moveit2.joint_names}')
+                    self.get_logger().warn(f'[IK] start_arm={[round(p, 3) for p in cur_arm]}')
+                    self.get_logger().warn(f'[IK] target   ={[round(p, 3) for p in arm_pos]}')
+                    self.get_logger().warn(f'[IK] delta    ={[round(d, 3) for d in delta]}')
+
+                    success = self._execute_motion(
+                        lambda: self.moveit2.move_to_configuration(arm_pos), stage_name=stage_name
+                    )
+
                 if success:
+                    # KEEP: LOWERING_TO_TARGET reads pre_place_ee_pose.
                     self.pre_place_ee_pose = self.moveit2.compute_fk(fk_link_names=['EE_robotiq_2f85'])
 
             elif stage_name == 'LOWERING_TO_TARGET':
@@ -311,15 +348,15 @@ class PickPlaceController(Node):
                 detach_req.model1_name = 'ur3e'
                 detach_req.link1_name = 'EE_robotiq_2f85'
                 detach_req.model2_name = goal.object_id
-                detach_req.link2_name = goal.object_id
+                detach_req.link2_name = goal.object_id  
                 future = self.detach_client.call_async(detach_req)
-                rclpy.spin_until_future_complete(self, future)
+                self._wait_for_future(future)
 
                 gripper_goal = GripperCommand.Goal()
                 gripper_goal.command.position = 0.8
                 gripper_goal.command.max_effort = 10.0
                 future = self.gripper_client.send_goal_async(gripper_goal)
-                rclpy.spin_until_future_complete(self, future)
+                self._wait_for_future(future)
                 continue
 
             elif stage_name == 'RETREATING':
@@ -332,12 +369,22 @@ class PickPlaceController(Node):
                     ), stage_name)
 
             elif stage_name == 'HOMING':
+                # Homing from the (elevated, known) retreat pose back to a fixed config.
+                # Stage 5 left the planner on PILZ PTP, so reset to OMPL here: homing is an
+                # adaptive reach that should route around the floor, not a blind PTP line.
+                self.moveit2.pipeline_id = 'ompl'
+                self.moveit2.planner_id  = 'RRTConnect'
                 success = self._execute_motion(
                     lambda: self.moveit2.move_to_configuration(
                         joint_positions=[0.0, -1.5707, 0.0, -1.5707, 0.0, 0.0]
                     ), stage_name)
 
             if not success:
+                # Force OMPL here too — a stage may have failed while PILZ was the active
+                # planner, and PTP-ing home from a low pose could dip through the floor.
+                # The safe-home must never inherit PILZ.
+                self.moveit2.pipeline_id = 'ompl'
+                self.moveit2.planner_id  = 'RRTConnect'
                 self._execute_motion(
                     lambda: self.moveit2.move_to_configuration(
                         joint_positions=[0.0, -1.5707, 0.0, -1.5707, 0.0, 0.0]

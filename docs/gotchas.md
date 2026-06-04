@@ -268,6 +268,67 @@ name for the subset you want, never by position.
 
 ---
 
+### 18 — Spinning the node from inside its own executor corrupts `node.executor`; lazy clients then hang
+*2026-06-05* (deepens #16)
+
+`rclpy.spin_until_future_complete(self, fut)` and `rclpy.spin_once(self)` (no `executor=`) grab the
+**global `SingleThreadedExecutor`**, call `add_node(self)` — which **reassigns `node.executor` to it**
+— spin, then `remove_node`, which **never restores the pointer**. After that, `node.executor` dangles
+at the idle global executor. pymoveit2's `wait_until_executed()` does this via `spin_once` on *every*
+motion, so the corruption happens early (stage 1), silently.
+
+- **Symptom:** a service future created *later* (our stage-5 `compute_ik`) **never completes** — 5 s
+  `future is not done`, not a crash. Its wait-set registration (`node.executor.wake()`) goes to the
+  dead executor, so the live `MultiThreadedExecutor` never watches that mailbox.
+- **Dormant:** only the **next lazily-created client** dies. Clients made in `__init__` (gripper,
+  attach, detach) survive — they were registered before any spin. Scene of crime ≠ scene of body.
+- **Sync survives, async-poll dies:** sync `compute_fk` / `compute_ik` `spin_once` the node *themselves*
+  to drive their own future, so they don't depend on the live executor. `*_async` + `while not
+  fut.done(): sleep` does.
+
+**Fix:** never spin the node from inside an executor-driven callback. Poll futures instead
+(`_wait_for_future`), create clients eagerly, and where a lib only offers a node-spinning sync wait
+(`wait_until_executed`), prefer its non-spinning form (poll `query_state()`). Stage-5 IK was fixed by
+switching to **sync `compute_ik`** (immune, self-spins) — #16's blanket "no sync compute_ik" only holds
+under *concurrent* spinning, which a serial single callback doesn't have. See [[ROS2 Executors, Threads and Spinning]].
+
+---
+
+### 19 — `colcon build` in the repo root poisons paths and silently drops the Gazebo camera
+*2026-06-05*
+
+Running `colcon build` from the **repo root** (not `ros2_ws/`) creates a stray `build/ install/ log/`
+in the root (and they're **not** gitignored there — `git add -A` would commit them, see #5). Worse: if
+you then `source` the **root** `install/setup.bash`, it prepends to `AMENT_PREFIX_PATH`, so
+`get_package_share_directory('robotics_vision_sim')` resolves to that **incomplete** install. The launch
+sets `GAZEBO_MODEL_PATH` from there → camera `model://` URIs don't resolve → **Gazebo silently drops the
+camera** (no `/camera/image_raw`, no ArUco detections, no error). Tell: the build warns
+`AMENT_PREFIX_PATH ... /install/... doesn't exist` — your shell is poisoned.
+
+**Fix:** always `colcon build` **and** `source` from `ros2_ws/`. After an accidental root build, delete
+the stray `build/ install/ log/` and open a **fresh terminal** to clear the poisoned env. See
+[[ROS2 Workspaces and Sourcing]].
+
+---
+
+### 20 — PILZ PTP self-collides when KDL hands it a contorted IK config
+*2026-06-05*
+
+A `compute_ik`→`move_to_configuration` PTP can be rejected as a **self-collision** (e.g.
+`robotiq_85_left_finger_link` ↔ `upper_arm_link`) even when the move is geometrically trivial. Our
+object→target was a pure **~90° base rotation** (same radius 0.447 m, same height), so the ideal config
+is "start joints, `shoulder_pan` +90°, rest unchanged". But KDL (local solver, cold seed) returned a
+far-basin config (`[IK] delta` = base +5.3, wrist_1 −7.1 rad). PTP **linearly interpolates** every joint,
+so that contortion sweeps the gripper through the arm across most of the path (indices 14–63/78).
+
+- More PTP time/attempts changes nothing (#14). The lever is the **IK solution**, set by the seed.
+- **Fix:** seed KDL into the right basin — pass `start_joint_state` = current joints with `shoulder_pan`
+  pre-advanced by the pick→place Cartesian angle. Verify with a `[IK] delta` log: it should collapse to
+  small, non-colliding values. If not, use a taught via-point. TRAC-IK (Phase 6) reduces this fragility.
+  See [[Inverse Kinematics]], gotcha #15.
+
+---
+
 ### TF2 note — prefer the single-call transform API
 
 Not a bug, but a standing convention: use `tf_buffer.transform(msg, 'base_link')` as one call

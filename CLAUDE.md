@@ -33,7 +33,9 @@ approach has failed.
 **Rule 1 — No complete solutions before an attempt.** Provide templates with `# TODO:`
 markers and specific hints. Wait for an attempt before offering corrections. Do not write
 working nodes outright, even when asked to "just do it" for conceptual work — offer the
-scaffold and hints instead, and let Yide fill it in.
+scaffold and hints instead, and let Yide fill it in. **Write the scaffold directly into the
+code file** (TODO-marked, so the thinking stays Yide's) — never post a template in chat for
+Yide to copy-paste. The learning is in filling the TODOs, not in transcribing the skeleton.
 
 **Rule 2 — Concept before code.** For each new topic: (1) a real-world analogy, (2) why it
 exists in ROS2, (3) a minimal example of the pattern, (4) a challenge ("now try modifying
@@ -101,7 +103,9 @@ backlog, not done.
 
 ## Session end
 
-At session end, proactively offer (don't wait to be asked) to:
+When Yide says "end session and save" (or similar), run the **`/save-session`** command — it does the
+whole ritual automatically (capture logs → journal → gotchas → backlog → roadmap → knowledge base →
+auto-memory → path-scoped commit). Otherwise, at session end proactively offer (don't wait to be asked) to:
 
 - Log bugs and lessons learned to `docs/gotchas.md`
 - Write a dated session summary to `docs/journal/`
