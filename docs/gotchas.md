@@ -286,11 +286,14 @@ motion, so the corruption happens early (stage 1), silently.
   to drive their own future, so they don't depend on the live executor. `*_async` + `while not
   fut.done(): sleep` does.
 
-**Fix:** never spin the node from inside an executor-driven callback. Poll futures instead
-(`_wait_for_future`), create clients eagerly, and where a lib only offers a node-spinning sync wait
-(`wait_until_executed`), prefer its non-spinning form (poll `query_state()`). Stage-5 IK was fixed by
-switching to **sync `compute_ik`** (immune, self-spins) — #16's blanket "no sync compute_ik" only holds
-under *concurrent* spinning, which a serial single callback doesn't have. See [[ROS2 Executors, Threads and Spinning]].
+**Fix (CORRECTED 2026-06-08 — see #21):** the original advice here was *"never spin; poll futures
+instead."* That was **over-corrected and wrong** — the non-spinning poll silently timed out (gotcha
+#21), because pymoveit2 had already evicted the node from the live MTE. The real rule: **in a
+sequential blocking callback, self-spin to drive each future** (`rclpy.spin_once`), exactly like
+`compute_fk`/`compute_ik` do; never rely on the live MTE to complete a future. Create clients eagerly
+(`__init__`) so a self-spin can drive them. #16's blanket "no sync compute_ik" only holds under
+*concurrent* spinning, which a serial single callback doesn't have. See
+[[ROS2 Executors, Threads and Spinning]].
 
 ---
 
@@ -326,6 +329,57 @@ so that contortion sweeps the gripper through the arm across most of the path (i
   pre-advanced by the pick→place Cartesian angle. Verify with a `[IK] delta` log: it should collapse to
   small, non-colliding values. If not, use a taught via-point. TRAC-IK (Phase 6) reduces this fragility.
   See [[Inverse Kinematics]], gotcha #15.
+
+---
+
+### 21 — A non-spinning future poll silently times out (pymoveit2 evicted the node from your MTE)
+*2026-06-08* (corrects #18's prescribed fix)
+
+Every gripper/attach/detach stage cost exactly ~10s (= 2 waits × the 5s `_wait_for_future` timeout),
+and `Attach result:` logged **`None`**. Tell: a *completed* `call_async` future returns a `Response`
+object, never `None` — `None` means the future never completed and the poll bailed on timeout.
+
+**Mechanism.** `_wait_for_future` was a passive poll (`while not fut.done(): time.sleep()`) that assumed
+the background `MultiThreadedExecutor`'s spare threads would complete the future. They can't:
+pymoveit2's helpers (`wait_until_executed`/`compute_fk`/`compute_ik`) call `rclpy.spin_once(node)` with
+**no `executor=`**, which uses the **global** executor; `add_node` then fires the `node.executor` setter,
+which **evicts the node from your MTE** (a node has exactly one owner). After the first MoveIt call in the
+callback, your MTE no longer holds the node, so its threads service nothing for it — the gripper/attach
+response is never processed, the future never gets stamped, and you burn the full timeout every time. The
+operations still *happen* (Gazebo gripper + LinkAttacher act on their own), so it merely looked slow.
+
+**Fix.** Make the wait **spin the node itself**: `while not fut.done(): rclpy.spin_once(self, timeout_sec=0.1)`.
+`spin_once` pumps the whole node; the response gets processed and the client stamps *its* future as a side
+effect. Safe because the gripper/attach/detach clients are created in `__init__` (fully registered), not
+lazily mid-callback (#18's hang case). This is the **same self-spin discipline** as `compute_fk`/sync
+`compute_ik` — one consistent model: in a sequential blocking callback, drive your own futures by spinning;
+never depend on the live MTE. (Don't mix in async-relying-on-the-MTE — that's the oil/water that broke #18.)
+See [[ROS2 Executors, Threads and Spinning]].
+
+---
+
+### 22 — OMPL plans straight through objects that aren't in the planning scene (Gazebo ≠ planning scene)
+*2026-06-08*
+
+The reach knocked the box aside even though OMPL "has collision avoidance." It does — but only against
+MoveIt's **planning scene** (robot + attached objects + published `CollisionObject`s). The Gazebo box is
+in the **physics world**, which the planner cannot see. Two separate worlds; you are the bridge.
+
+- **Fix (reach):** publish the object as a world `CollisionObject` (`add_collision_box`) *before* planning,
+  using **x,y from vision and z from known geometry** (ArUco z is noisy). The call **publishes and returns
+  immediately** — give move_group a short settle (~0.2s) before planning or OMPL plans against the empty
+  scene. (`publish()` itself needs no spin; the delay is for the *other* process to apply it.)
+- **Lifecycle:** the object must change role or you trade one collision for another —
+  **add** (world obstacle, reach avoids it) → **attach** to the gripper at grasp (so LIFTING knows it rose
+  with the arm, not a phantom on the floor) → **detach + remove** at place.
+- **`touch_links` must be the FULL gripper link set,** not just fingertips: a held box is cradled by the
+  whole hand, so `robotiq_85_base_link ↔ aruco_box` got flagged until base/knuckles/inner-knuckles/
+  fingers/tips were all whitelisted. `touch_links` takes **link** names, not joint names.
+- **Abort path:** detach the scene object before the safe-home (else the home is in collision and burns
+  every retry — set `max_retries=1`). NOTE: this only syncs MoveIt's scene, not the LinkAttacher physics
+  weld — physical detach on abort is backlogged.
+
+See [[MoveIt Planning Scene and Collision Objects]].
 
 ---
 

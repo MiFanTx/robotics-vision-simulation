@@ -24,16 +24,20 @@ ros2 action send_goal --feedback /run_task robotics_vision_sim_msgs/action/RunTa
   "{object_id: 'aruco_box', target_id: 'default'}"
 ```
 
-## Phase 2 — Motion quality 🔧 NEXT
+## Phase 2 — Motion quality ✅ COMPLETE (2026-06-08)
 
-Pipeline works but paths are non-intuitive. Fix before recording demos.
+Pipeline paths are now intuitive and demo-ready. Clean 9/9-stage end-to-end run verified.
 
-- [x] **Cartesian planning for straight-line stages** (LOWER, LIFT, LOWER_TO_TARGET) — `cartesian=True, fraction_threshold=0.95` using FK pre-grasp pose. Confirmed straight-line motion in end-to-end test (2026-06-01).
-- [x] **Pre-grasp joint config** `[0.1, -0.8, 0.75, -1.4, -1.6, 0.0]` — found manually (gripper directly above box); straight-line stages show no wrist wrap. Analytical computation from object pose is backlog. (RViz tuning N/A — `ur_moveit_config` doesn't know the Robotiq gripper, so RViz is skipped.)
-- [~] **Hybrid free-space moves (decided 2026-06-04, implemented 2026-06-05).** OMPL for the adaptive reaches (`MOVING_TO_OBJECT` stage 1, `HOMING`/abort stage 9), **PILZ PTP for the known object→target move** (stage 5). Stage 1 is plain OMPL `move_to_pose`; stage 5 resolves the place pose → a joint config via **sync** `compute_ik` then PTP; homing resets to OMPL (9a/9b done). Getting the run to reach stage 5 required killing a deep rclpy executor bug — node-spinning sync calls corrupt `node.executor` and silently kill the lazily-created IK client (gotcha #18, KB [[ROS2 Executors, Threads and Spinning]]).
-  - **← NEXT: stage-5 self-collision.** PILZ PTP is rejected as a self-collision (`robotiq_85_left_finger_link` ↔ `upper_arm_link`). The place is geometrically a ~90° base rotation of the pick (same radius/height), but KDL returns a contorted IK config that PTP sweeps through the arm (gotcha #20). **Fix scaffolded, unverified:** seed `compute_ik` with the current joints + base pre-rotated by the pick→place angle. If it still collides → taught via-point. See the 2026-06-05 journal and gotchas #18–20.
-- [ ] **Reliable repeat execution** — 5 cycles without failure.
-- [x] **Defensive `success = False`** at top of stage loop to prevent stale reads — set at the top of each stage iteration (`pick_place_controller.py`); confirmed by the clean abort/safe-home on IK and planning failures (2026-06-03).
+- [x] **Cartesian planning for straight-line stages** (LOWER, LIFT, LOWER_TO_TARGET) — `cartesian=True, fraction_threshold=0.95` using FK pre-grasp pose. Confirmed straight-line motion (2026-06-01).
+- [x] **Pre-grasp joint config** — found manually; straight-line stages show no wrist wrap. Analytical computation from object pose is backlog.
+- [x] **Hybrid free-space moves** (decided 2026-06-04, implemented 2026-06-05). OMPL for the adaptive reaches (`MOVING_TO_OBJECT`, `HOMING`/abort), **PILZ PTP for the known object→target move** (stage 5, sync `compute_ik` → PTP).
+- [x] **Stage-5 PILZ self-collision fixed (2026-06-08).** Seeded `compute_ik` with current joints + `shoulder_pan += Δθ` (pick→place bearing) so KDL lands in the clean base-rotation basin. `[IK] delta` collapsed to `pan≈+π/2, wrist_3≈+π/2, rest≈0`; PTP plans + executes cleanly (gotcha #20).
+- [x] **Reliable repeat execution** — 5 cycles without failure (2026-06-08).
+- [x] **Gripper/attach latency fixed (2026-06-08)** — ~10s/stage → ~ms. `_wait_for_future` now self-spins instead of a passive poll the evicted MTE could never service (gotcha #21).
+- [x] **Collision-scene lifecycle (2026-06-08)** — box added to the planning scene → attached to gripper (full-gripper `touch_links`) → detached+removed, so OMPL routes around it instead of knocking it (gotcha #22).
+- [x] **Vision/geometry z-decoupling (2026-06-08)** — x,y from ArUco, z derived from known surface + box height; place reuses the grasp height so the box is set down, not driven into the floor.
+- [x] **Defensive `success = False`** at top of stage loop to prevent stale reads (2026-06-03).
+- **Known limitation (deferred to Phase 6):** Robotiq fingers flick/asymmetric on release — Gazebo Classic ignores URDF `<mimic>` joints. Cosmetic; not a motion-quality defect.
 
 ## Phase 3 — Demo & portfolio polish
 
@@ -84,8 +88,8 @@ Pipeline works but paths are non-intuitive. Fix before recording demos.
 | Vision pipeline | ✅ Done | ArUco, TF2 transform, `/vision/object_pose` |
 | Pick-place controller | ✅ Done | 9 stages, MoveIt2, gripper, attachment |
 | Task manager | ✅ Done | RunTask action, staleness check, feedback |
-| Motion quality | 🔧 In progress | Hybrid done (OMPL stages 1/9, PILZ stage 5); executor bug fixed. Stage-5 PILZ blocked on a self-collision from a contorted KDL IK config — seed fix scaffolded, unverified. |
-| Demo recording | ❌ Not started | Blocked on motion quality |
+| Motion quality | ✅ Done | Clean 9/9 run verified. Hybrid OMPL/PILZ; stage-5 seed fix; gripper latency fixed; collision-scene lifecycle; vision/geometry z-decoupling. Only the mimic-joint flick remains (Phase 6). |
+| Demo recording | ⏭️ Unblocked | Motion is demo-ready — Phase 3 next |
 | README | ❌ Not started | |
 | Advanced features | ❌ Not started | |
 

@@ -1,4 +1,5 @@
 import time
+import math
 
 import rclpy
 from rclpy.node import Node
@@ -26,6 +27,14 @@ class PickPlaceController(Node):
         self.pre_place_ee_pose = None
 
         self.safe_height = 0.05 # the stopping distance above the object in meter
+
+        # --- Scene assumptions (named on purpose) ----------------------------------
+        # ArUco's z (the camera optical axis) is the noisiest axis of the marker pose,
+        # and we already KNOW the object's height and the plane it rests on. So we take
+        # x,y from vision and DERIVE z from geometry. Valid only while these hold:
+        self.surface_z = 0.0    # ground_plane height (worlds/pick_place.world) — objects rest here
+        self.box_height = 0.05  # aruco_box edge length (models/aruco_box/model.sdf)
+        # FUTURE: per-object height (multi-object) + per-target surface height (tables) — see roadmap.
 
         # Separate Callback Group for action and client
         self.action_cb_group = ReentrantCallbackGroup()
@@ -110,19 +119,25 @@ class PickPlaceController(Node):
         return False
 
     def _wait_for_future(self, future, timeout=5.0):
-        """Wait for a future WITHOUT spinning the node.
+        """Wait for a future by spinning THIS node ourselves.
 
-        Do NOT use rclpy.spin_until_future_complete(self, future) here: it grabs the
-        global SingleThreadedExecutor, reassigns node.executor to it, and never restores
-        it — silently breaking the next lazily-created client (the stage-5 compute_ik
-        hang we diagnosed). Polling is safe: our MultiThreadedExecutor's other threads
-        service the future while this one sleeps (needs >=2 threads; we run 4).
+        We cannot rely on the background MultiThreadedExecutor to complete this future.
+        pymoveit2's helpers (wait_until_executed / compute_fk / compute_ik) call
+        `rclpy.spin_once(self._node)` with no executor, which defaults to the GLOBAL
+        executor; add_node then evicts our node from the MTE (a node has exactly one
+        owner). So after the first MoveIt call in this callback, the MTE no longer holds
+        our node and its threads service nothing for us — a non-spinning poll would never
+        see the future complete and would always burn the full timeout (the 10s gripper
+        stages we diagnosed). Fix: drive the future the same way pymoveit2 does, by
+        spinning our own node until the response lands. Safe here because the gripper/
+        attach/detach clients are created in __init__ (fully registered), not lazily
+        mid-callback (the case that caused gotcha #18's hang).
         """
         start = time.time()
-        # TODO: the same poll you wrote for IK in stage 5 —
         while not future.done():
-            if time.time() - start > timeout: break
-            time.sleep(0.05)
+            if time.time() - start > timeout:
+                break
+            rclpy.spin_once(self, timeout_sec=0.1)
 
         return future.done()
 
@@ -178,19 +193,53 @@ class PickPlaceController(Node):
         obj_ori.z = 0.0
         obj_ori.w = 0.707
 
-        GRASP_Z_OFFSET = -0.04  # 4cm below marker surface
-        obj_pos.z += GRASP_Z_OFFSET
+        # Override the noisy marker z with a geometry-derived height (x,y stay from vision).
+        # The box of height self.box_height rests on self.surface_z, so its centre and a
+        # robust grasp height are both known without trusting the marker's depth axis.
+        # TODO(grasp-z): derive these two from self.surface_z and self.box_height —
+        box_center_z =  self.surface_z + self.box_height * 0.5       # geometric centre of the box on the surface
+        grasp_z      = box_center_z        # TCP grasp height (the box centre is a robust choice)
+        obj_pos.z    = grasp_z    # feed it into the existing approach (obj_safe_z) + descent
+        # box_center_z is reused by the collision box below; grasp_z is reused by
+        # LOWERING_TO_TARGET so the box is set down at the height it was picked from.
 
         obj_safe_z = obj_pos.z + self.safe_height
         tgt_safe_z = tgt_pos.z + self.safe_height
 
-        # self.get_logger().info(
-        #     f'Object pose: x={obj_pos.x:.3f}, y={obj_pos.y:.3f}, z={obj_pos.z:.3f}'
-        # )
-        # self.get_logger().info(
-        #     f'Approach z: {obj_pos.z + self.safe_height:.3f}, Grasp z: {obj_pos.z:.3f}'
-        # )
+        # --- Register the box in MoveIt's planning scene ----------------------------
+        # OMPL only avoids what is IN the planning scene; the Gazebo box is invisible to
+        # it, so the stage-1 reach plans straight through and knocks it. Add the box as a
+        # WORLD collision object here so OMPL routes around it. (It changes role later:
+        # attached at GRASPING, removed at PLACING — see those stages.)
+        # TODO(scene-add): add a 0.05^3 collision box at the box CENTRE.
+        #   - size comes from model.sdf: (0.05, 0.05, 0.05)
+        #   - obj_pos.z was just shifted DOWN by GRASP_Z_OFFSET to the grasp point. Decide
+        #     what z the box CENTRE should be (the marker sits on the top face) — a wrong
+        #     centre means OMPL avoids the wrong volume.
+        self.moveit2.add_collision_box(
+            id=goal.object_id, size=(0.05, 0.05, 0.05),
+            # TODO(grasp-z): the collision box centre is box_center_z (x,y from vision, z
+            # from geometry) — the old `obj_pos.z + 0.015` assumed the marker-offset z.
+            position=[obj_pos.x, obj_pos.y, box_center_z],
+            quat_xyzw=[obj_ori.x, obj_ori.y, obj_ori.z, obj_ori.w],
+            frame_id='base_link')
+        
+        time.sleep(0.2) # wait for collision box to be added
 
+        self.get_logger().info(
+            f'Object pose: x={obj_pos.x:.3f}, y={obj_pos.y:.3f}, z={obj_pos.z:.3f}'
+        )
+        self.get_logger().info(
+            f'Approach z: {obj_pos.z + self.safe_height:.3f}, Grasp z: {obj_pos.z:.3f}'
+        )
+
+        
+
+        # TODO(scene-settle): add_collision_box PUBLISHES and returns immediately. move_group
+        #   (a separate process) needs a beat to receive + apply it before stage 1 plans, or
+        #   OMPL plans against the still-empty scene. Give it a short settle here.
+
+        
         start_time = time.time()
 
         # loop through the stages
@@ -257,6 +306,22 @@ class PickPlaceController(Node):
                 self._wait_for_future(future)
                 attach_result = future.result()
                 self.get_logger().info(f'Attach result: {attach_result}')
+
+                # The box is now held. Tell MoveIt it's part of the robot so (a) the closed
+                # fingers touching it don't read as a collision and (b) LIFTING knows the box
+                # rose WITH the arm instead of leaving a phantom box on the ground for the
+                # planner to crash into.
+                # TODO(scene-attach): attach the collision object to the gripper.
+                self.moveit2.attach_collision_object(
+                    id=goal.object_id, link_name='EE_robotiq_2f85', touch_links=[
+                        'robotiq_85_base_link',
+                        'robotiq_85_left_knuckle_link', 'robotiq_85_right_knuckle_link',
+                        'robotiq_85_left_inner_knuckle_link', 'robotiq_85_right_inner_knuckle_link',
+                        'robotiq_85_left_finger_link', 'robotiq_85_right_finger_link',
+                        'robotiq_85_left_finger_tip_link', 'robotiq_85_right_finger_tip_link'])
+                #   touch_links = the gripper finger links allowed to contact the box. Find
+                #   their exact names by introspection (URDF / joint_states) — the stage-5
+                #   self-collision error named one of them.
                 continue
 
             elif stage_name == 'LIFTING':
@@ -277,7 +342,7 @@ class PickPlaceController(Node):
                 # to the config, so PILZ can't substitute a wrist-flipped IK solution of its
                 # own. This is the stage that proves the IK + PILZ pipeline actually works.
                 #
-                # TODO(5a): switch the planner to PILZ PTP for this stage.
+                # Switch the planner to PILZ PTP for this stage.
                 self.moveit2.pipeline_id = 'pilz_industrial_motion_planner'
                 self.moveit2.planner_id = 'PTP'
                 # Resolve the above-target POSE -> a joint config via the SYNC compute_ik
@@ -287,23 +352,25 @@ class PickPlaceController(Node):
                 # wait_until_executed spin corrupts. Safe in our serial single-callback flow
                 # (compute_fk proves it); gotcha #16's __enter__ crash needs concurrent
                 # spinning, which doesn't happen on this standalone call.
+
+
                 # The place is the pick rotated ~90deg about the base (same radius/height), so
-                # the clean solution is "start config, base pre-rotated by Δθ". From a cold
-                # seed KDL jumps basins (see the [IK] delta). So SEED it into the right basin:
-                # the current joints with shoulder_pan advanced by the pick->place Cartesian
-                # angle. KDL then converges to the near-start solution PTP can sweep cleanly.
-                # TODO(seed): build start_joint_state, then pass it to compute_ik below.
-                #   needs `import math` at the top of the file.
-                #   pick = self.pre_grasp_ee_pose[0].pose.position    # EE above the object
-                #   d_theta = math.atan2(tgt_pos.y, tgt_pos.x) - math.atan2(pick.y, pick.x)
-                #   cur = self.moveit2.joint_state
-                #   m = dict(zip(cur.name, cur.position))
-                #   seed = [m[j] for j in self.moveit2.joint_names]
-                #   seed[0] += d_theta                                # pre-rotate the base
+                # the clean IK solution is "start config, base pre-rotated by Δθ". KDL is a
+                # local solver: from a cold seed it can jump to a contorted basin that PTP then
+                # sweeps through the upper arm (self-collision). So SEED it into the right basin
+                # — current joints with shoulder_pan advanced by the pick->place bearing change
+                # — and KDL converges to the near-start solution PTP can sweep cleanly.
+                pick = self.pre_grasp_ee_pose[0].pose.position    # EE above the object
+                d_theta = math.atan2(tgt_pos.y, tgt_pos.x) - math.atan2(pick.y, pick.x)
+                cur = self.moveit2.joint_state
+                m = dict(zip(cur.name, cur.position))
+                seed = [m[j] for j in self.moveit2.joint_names]
+                seed[0] += d_theta                                # pre-rotate the base
+
                 target_config = self.moveit2.compute_ik(
                     position=[tgt_pos.x, tgt_pos.y, tgt_safe_z],
                     quat_xyzw=[tgt_ori.x, tgt_ori.y, tgt_ori.z, tgt_ori.w],
-                    # TODO(seed): start_joint_state=seed,
+                    start_joint_state=seed,
                 )
 
                 if target_config is None:
@@ -312,19 +379,6 @@ class PickPlaceController(Node):
                 else:
                     name_to_pose = dict(zip(target_config.name, target_config.position))
                     arm_pos = [name_to_pose[i] for i in self.moveit2.joint_names]
-
-                    # DIAGNOSTIC: per-joint delta start(current) -> IK target. If this is a
-                    # clean base rotation, joint 0 (shoulder_pan) ~ +1.57 and the rest ~ 0.
-                    # Big deltas on the wrist/elbow joints = KDL picked a contorted basin,
-                    # which is what PTP sweeps through the upper arm. (remove after diagnosis)
-                    cur = self.moveit2.joint_state
-                    cur_map = dict(zip(cur.name, cur.position))
-                    cur_arm = [cur_map.get(j, float('nan')) for j in self.moveit2.joint_names]
-                    delta = [t - c for t, c in zip(arm_pos, cur_arm)]
-                    self.get_logger().warn(f'[IK] joints   ={self.moveit2.joint_names}')
-                    self.get_logger().warn(f'[IK] start_arm={[round(p, 3) for p in cur_arm]}')
-                    self.get_logger().warn(f'[IK] target   ={[round(p, 3) for p in arm_pos]}')
-                    self.get_logger().warn(f'[IK] delta    ={[round(d, 3) for d in delta]}')
 
                     success = self._execute_motion(
                         lambda: self.moveit2.move_to_configuration(arm_pos), stage_name=stage_name
@@ -336,9 +390,14 @@ class PickPlaceController(Node):
 
             elif stage_name == 'LOWERING_TO_TARGET':
                 pose = self.pre_place_ee_pose[0].pose
+                # Set the box DOWN, don't drive it into the floor. Reuse the grasp height:
+                # the box rested on the surface at grasp_z, so returning the TCP there rests
+                # it again. Valid while place surface == pick surface; the general form is
+                # grasp_z + (place_surface_z - pick_surface_z).
+                # TODO(place-z): use grasp_z for the z below, not pose.position.z - self.safe_height.
                 success = self._execute_motion(
                     lambda: self.moveit2.move_to_pose(
-                        position=[pose.position.x, pose.position.y, pose.position.z - self.safe_height],
+                        position=[pose.position.x, pose.position.y, grasp_z],
                         quat_xyzw=[pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w],
                         cartesian=True, cartesian_fraction_threshold=0.95
                     ), stage_name)
@@ -351,6 +410,14 @@ class PickPlaceController(Node):
                 detach_req.link2_name = goal.object_id  
                 future = self.detach_client.call_async(detach_req)
                 self._wait_for_future(future)
+
+                # Box released in Gazebo; now sync MoveIt's scene: detach it from the robot
+                # AND remove it from the world so it stops being an obstacle / phantom on the
+                # next move. (Leave it attached and HOMING would route around a box that's no
+                # longer on the gripper.)
+                # TODO(scene-detach): detach the attached object, then remove the world object.
+                self.moveit2.detach_collision_object(goal.object_id)
+                self.moveit2.remove_collision_object(goal.object_id)
 
                 gripper_goal = GripperCommand.Goal()
                 gripper_goal.command.position = 0.8
@@ -380,15 +447,25 @@ class PickPlaceController(Node):
                     ), stage_name)
 
             if not success:
+                # Clean up any held object first. A stage may have failed while the box was
+                # attached; a safe-home with it still attached collides and would burn every
+                # retry (the base_link↔box spam we saw). Detach from the planning scene so the
+                # home is plannable. No-op if nothing was attached.
+                # NOTE (backlog): this only detaches in MoveIt's scene, not LinkAttacher's
+                # physics weld — the box stays welded in Gazebo on an abort. Fix recovery later.
+                self.moveit2.detach_collision_object(goal.object_id)
+                self.moveit2.remove_collision_object(goal.object_id)
                 # Force OMPL here too — a stage may have failed while PILZ was the active
                 # planner, and PTP-ing home from a low pose could dip through the floor.
                 # The safe-home must never inherit PILZ.
                 self.moveit2.pipeline_id = 'ompl'
                 self.moveit2.planner_id  = 'RRTConnect'
+                # max_retries=1: a single safe-home attempt. If the home itself can't plan,
+                # retrying the identical request 5x just spams the log — abort cleanly instead.
                 self._execute_motion(
                     lambda: self.moveit2.move_to_configuration(
                         joint_positions=[0.0, -1.5707, 0.0, -1.5707, 0.0, 0.0]
-                    ), 'HOMING')
+                    ), 'HOMING', max_retries=1)
                 result.status = PickPlace.Result.STATUS_ABORTED
                 result.message = f'Pick and place aborted at stage {stage_name}'
                 result.total_time_sec = time.time() - start_time
