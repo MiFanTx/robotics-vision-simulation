@@ -227,7 +227,7 @@ random seeds while a single `compute_ik` gets one seed and ~5 ms.
   low pick config caused `NO_IK_SOLUTION` when the target was raised 15 cm — the solution moved to a
   different, more-upright basin the seed no longer pointed at. Fixed seed ↔ target height is a
   fragile coupling.
-- Real fix is on the roadmap: replace KDL with TRAC-IK (Phase 6) — far less seed-sensitive.
+- Real fix is on the roadmap: replace KDL with TRAC-IK (A3) — far less seed-sensitive.
 
 **Principle:** a single `compute_ik` is not the robust IK that a pose-goal planner gives you for free.
 With KDL, give it budget *and* a seed near the expected solution — or switch to TRAC-IK.
@@ -327,7 +327,7 @@ so that contortion sweeps the gripper through the arm across most of the path (i
 - More PTP time/attempts changes nothing (#14). The lever is the **IK solution**, set by the seed.
 - **Fix:** seed KDL into the right basin — pass `start_joint_state` = current joints with `shoulder_pan`
   pre-advanced by the pick→place Cartesian angle. Verify with a `[IK] delta` log: it should collapse to
-  small, non-colliding values. If not, use a taught via-point. TRAC-IK (Phase 6) reduces this fragility.
+  small, non-colliding values. If not, use a taught via-point. TRAC-IK (A3) reduces this fragility.
   See [[Inverse Kinematics]], gotcha #15.
 
 ---

@@ -6,8 +6,11 @@
 
 ## What this is
 
-A demo-ready, portfolio-quality **vision-guided pick-and-place** system in ROS2 + Gazebo,
-built to show industry-standard ROS2/MoveIt2 skills. Simulation only, no hardware.
+A **vision-guided pick-and-place** system in ROS2 + Gazebo — UR3e + Robotiq, simulation
+only, no hardware. Built as an industrial-grade successor to the Dobot final project; that
+original mission closed with Phases 1–2. The repo now serves as the **training ground** for
+long-term ROS2/MoveIt2 mastery (Track A) — the known-good system gets deliberately deepened
+one capability at a time. See `docs/roadmap.md` for the track structure.
 
 - **Repo:** https://github.com/MiFanTx/robotics-vision-simulation
 - **Workspace:** `~/Workspace/robotics-vision-simulation/ros2_ws/`
@@ -15,14 +18,17 @@ built to show industry-standard ROS2/MoveIt2 skills. Simulation only, no hardwar
 
 ## Current state (keep this honest)
 
-Phase 1 (core pipeline) is **complete and runs end-to-end**. Phase 2 (motion quality) is
-**in progress** — Cartesian straight-line stages are done. PILZ PTP is now wired in for the
-free-space stages (pipeline loaded, controller switched, `MOVING_TO_OBJECT` resolves the pose to a
-joint config via async IK) but is **blocked**: PTP has no collision avoidance, so the reach from home
-to the pick config dips through `ground_plane`. Open decision — taught via-point vs hybrid OMPL/PILZ.
-See `docs/roadmap.md`, the 2026-06-03 journal, and gotchas #14–17.
+Phases 1–2 are **complete** (core pipeline + motion quality), verified 2026-06-08: clean
+9/9-stage run, 5 consecutive cycles. Hybrid OMPL/PILZ free-space moves, Cartesian
+straight-line stages, stage-5 IK seeding, collision-scene lifecycle, and vision/geometry
+z-decoupling all working. Only the cosmetic mimic-joint finger flick remains (deferred).
 
-Detection currently uses **ArUco markers** (prototype). Markerless detection is backlog, not done.
+**Current: A1 — v1 closure** — harden the known-good system (vision/motion failure recovery,
+graceful abort, physical detach-on-abort), then a v1 proof artifact (architecture diagram,
+design-decisions doc, one clean recorded run, README pass). See `docs/roadmap.md` for the
+A1–A4 track structure.
+
+Detection uses **ArUco markers**. Markerless / VLA perception is later-track, not done.
 
 ## Architecture
 

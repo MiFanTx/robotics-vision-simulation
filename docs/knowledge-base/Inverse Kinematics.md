@@ -60,7 +60,7 @@ PILZ PTP needs a *joint* goal, so `MOVING_TO_OBJECT` computes IK on the object p
 config. Hit `NO_IK_SOLUTION` on a low pick pose — fixed by raising the KDL budget (above). Then learned
 the **seed↔target coupling** the hard way: a seed tuned for the low pick config made IK *fail* when I
 raised the hover target 15 cm (solution moved to a different basin). The proper fix is **TRAC-IK**
-(roadmap Phase 6) — combines KDL with an optimization solver, far less seed-sensitive.
+(roadmap A3) — combines KDL with an optimization solver, far less seed-sensitive.
 
 ## Related
 [[PILZ Industrial Motion Planner]] (consumes IK joint goals) · [[MoveIt2 and Planning Pipelines]] ·

@@ -15,10 +15,12 @@ This is Claude Code's standing instruction set for this repo. It does two things
 
 ## Who you're working with
 
-Yide is an MSc Computer Science student building a job-ready ROS2/MoveIt2 portfolio.
-Strong computer-vision background; comparatively newer to ROS2 manipulation. The purpose
-of this project is **employability** — the test is whether Yide can rebuild this system
-from scratch afterward. Optimize for that, not for task throughput.
+Yide is an MSc Computer Science student on a long-term ROS2/MoveIt2 **mastery track**.
+Strong computer-vision background; comparatively newer to ROS2 manipulation. This repo is
+no longer a hiring portfolio with a finish line — it is the **training ground** where the
+known-good system gets deliberately deepened one capability at a time. The metric is
+**learning value per hour**; the test is whether Yide can rebuild this system from scratch
+afterward. Optimize for that, not for task throughput.
 
 ## Primary directive
 
@@ -94,7 +96,8 @@ license to skip the teaching loop. Default stance:
 - **Modularity** — independent, testable nodes.
 - **Simulation-first** — no hardware dependency (Gazebo + UR3e). Never assume a physical
   robot.
-- **Portfolio-focused** — professional quality throughout.
+- **Depth over polish** — professional-quality engineering, documented for depth-on-demand
+  (survives a robotics engineer's questions), not HR skimmability.
 - **ROS2 best practices** — standard messages, launch files, conventions.
 
 Reference the current UR3e simulation architecture (`AGENTS.md`), never the legacy Dobot

@@ -1,96 +1,107 @@
-# Project Roadmap
+# Project Roadmap — Track A (The Arm)
 
-Living roadmap for the robotics-vision-simulation portfolio project. Update as it evolves.
+Living roadmap for the robotics-vision-simulation project. Update as it evolves.
 
-**Goal:** a demo-ready, portfolio-quality vision-guided pick-and-place system in ROS2/Gazebo
-demonstrating industry-standard skills to employers.
+> **Reframed 2026-06-10.** This project is no longer a hiring portfolio with a finish line.
+> The original mission — *a better, industrial version of the Dobot final project* — was
+> achieved when Phases 1–2 closed. The repo now serves as the primary **training ground**
+> on the long-term mastery track: the known-good system that gets deliberately deepened,
+> hardened, and upgraded one capability at a time.
+>
+> **Metric:** learning value per hour. **Proof** (documentation, explainable demos) is the
+> exhaust, never the goal — written for depth-on-demand (survives a robotics engineer's
+> questions), not for HR skimmability.
+>
+> This roadmap covers Track A only. The two-track frame (Track B = embedded/physical,
+> rhythm, review cadence) lives in `master-plan.md` in the personal meta-repo.
+
 **Repo:** https://github.com/MiFanTx/robotics-vision-simulation
 
 ---
 
-## Phase 1 — Core pipeline ✅ COMPLETE
+## Completed foundation
 
-End-to-end built and connected.
+- **Phase 1 — Core pipeline ✅** (see git history / journal): UR3e + Robotiq in Gazebo,
+  ArUco vision pipeline, TF2 pose transform, 9-stage pick-place state machine,
+  RunTask orchestration. One `ros2 action send_goal` runs the whole system.
+- **Phase 2 — Motion quality ✅ (2026-06-08):** Cartesian straight-line stages, hybrid
+  OMPL/PILZ free-space moves, stage-5 IK seeding, self-spin wait discipline,
+  collision-scene lifecycle, z-decoupling. Clean 9/9 run, 5 consecutive cycles.
 
-- [x] UR3e + Robotiq 2F-85 gripper in Gazebo Classic
-- [x] Camera node + ArUco detection (`vision_pipeline_node`)
-- [x] TF2 pose transform camera → base_link (`pose_estimation_node`)
-- [x] 9-stage pick-and-place state machine with MoveIt2 (`pick_place_controller`)
-- [x] Task orchestrator with RunTask action + staleness check (`task_manager_node`)
-- [x] One `ros2 action send_goal` runs the whole pipeline
+## A1 — v1 Closure 🎯 CURRENT (~1.5–2 weeks at current capacity)
 
-```bash
-ros2 action send_goal --feedback /run_task robotics_vision_sim_msgs/action/RunTask \
-  "{object_id: 'aruco_box', target_id: 'default'}"
-```
+Harden the known-good system, then formally close v1. *Done = the repo could be handed
+to a robotics engineer and survive their questions.*
 
-## Phase 2 — Motion quality ✅ COMPLETE (2026-06-08)
+Robustness (old Phase 3, kept — error recovery is core systems engineering):
 
-Pipeline paths are now intuitive and demo-ready. Clean 9/9-stage end-to-end run verified.
-
-- [x] **Cartesian planning for straight-line stages** (LOWER, LIFT, LOWER_TO_TARGET) — `cartesian=True, fraction_threshold=0.95` using FK pre-grasp pose. Confirmed straight-line motion (2026-06-01).
-- [x] **Pre-grasp joint config** — found manually; straight-line stages show no wrist wrap. Analytical computation from object pose is backlog.
-- [x] **Hybrid free-space moves** (decided 2026-06-04, implemented 2026-06-05). OMPL for the adaptive reaches (`MOVING_TO_OBJECT`, `HOMING`/abort), **PILZ PTP for the known object→target move** (stage 5, sync `compute_ik` → PTP).
-- [x] **Stage-5 PILZ self-collision fixed (2026-06-08).** Seeded `compute_ik` with current joints + `shoulder_pan += Δθ` (pick→place bearing) so KDL lands in the clean base-rotation basin. `[IK] delta` collapsed to `pan≈+π/2, wrist_3≈+π/2, rest≈0`; PTP plans + executes cleanly (gotcha #20).
-- [x] **Reliable repeat execution** — 5 cycles without failure (2026-06-08).
-- [x] **Gripper/attach latency fixed (2026-06-08)** — ~10s/stage → ~ms. `_wait_for_future` now self-spins instead of a passive poll the evicted MTE could never service (gotcha #21).
-- [x] **Collision-scene lifecycle (2026-06-08)** — box added to the planning scene → attached to gripper (full-gripper `touch_links`) → detached+removed, so OMPL routes around it instead of knocking it (gotcha #22).
-- [x] **Vision/geometry z-decoupling (2026-06-08)** — x,y from ArUco, z derived from known surface + box height; place reuses the grasp height so the box is set down, not driven into the floor.
-- [x] **Defensive `success = False`** at top of stage loop to prevent stale reads (2026-06-03).
-- **Known limitation (deferred to Phase 6):** Robotiq fingers flick/asymmetric on release — Gazebo Classic ignores URDF `<mimic>` joints. Cosmetic; not a motion-quality defect.
-
-## Phase 3 — Demo & portfolio polish
-
-- [ ] **README** — overview, architecture diagram, setup, demo GIF/video (60-second understanding).
-- [ ] **Demo recording** — launch → detect → pick → place → home, no errors, smooth motion.
-- [ ] **Architecture diagram** — the node pipeline.
-- [ ] **Code cleanup** — remove debug logs, add docstrings, consistent style.
-- [ ] **Repo polish** — `.gitignore`, clean history, tags/releases.
-
-## Phase 4 — Error recovery
-
-- [ ] **Vision failure handling** — on stale `/vision/object_pose`, wait + retry detection (configurable count/timeout) instead of aborting.
-- [ ] **Motion failure recovery** — safe home before abort; add a joint-space home fallback that bypasses Cartesian.
+- [ ] **Vision failure handling** — on stale `/vision/object_pose`, wait + retry detection
+  (configurable count/timeout) instead of aborting.
+- [ ] **Motion failure recovery** — safe home before abort; joint-space home fallback that
+  bypasses Cartesian.
 - [ ] **Graceful abort from any stage** — cancel always ends in a safe home, never a frozen arm.
+- [ ] **Physically detach on abort** — clear the LinkAttacher weld, not just the MoveIt scene.
 
-## Phase 5 — Advanced features (stretch)
+v1 proof artifact (technical write-up, not marketing):
 
-**High value**
-- [ ] Yaw-aware grasp orientation (extract yaw from ArUco, keep fixed gripper-down pitch)
-- [ ] Markerless detection (YOLO or FoundationPose)
-- [ ] On-demand detection service (topic → callable service)
+- [ ] **Architecture diagram** — the node pipeline.
+- [ ] **Design-decisions doc** — the *whys*: stage-5 IK seeding, self-spin discipline,
+  z-decoupling, hybrid planner split, pinned `gazebo_ros2_control`.
+- [ ] **One clean recorded run** — launch → detect → pick → place → home.
+- [ ] **README pass** — overview, setup, links into the above. Depth-on-demand, minimal polish.
 
-**Medium value**
-- [ ] Target pose detection (dynamic place location)
-- [ ] Multi-object handling
-- [ ] Proximity-based grasp validation
+> Closing A1 unlocks Track B (embedded project) as the weekend hands-on lane.
 
-**Lower priority**
-- [ ] Proper SDF object model (realistic mass/inertia)
-- [ ] Hand-eye calibration node
-- [ ] Real hardware transfer guide
+## A2 — VLA Probe ⏳ NEXT (time-boxed: ~4 sessions, hard stop)
 
-## Phase 6 — Simulation fidelity
+Calibration, not product: puncture the "can I do cutting-edge?" doubt with a measured answer.
 
-- [ ] **Gripper mimic joints** — Robotiq closes asymmetrically in Gazebo Classic (mimic joints ignored). Add ros2_control transmissions for both fingers or a mimic plugin.
-- [ ] **Camera URDF integration** — define camera as a link in the robot URDF so `robot_state_publisher` publishes its TF; removes the SDF + manual `camera_tf_broadcaster` two-source problem.
-- [ ] **TRAC-IK or Bio-IK** — replace KDL; fewer wrist flips, more repeatable configs.
-- [ ] **PILZ Industrial Planner** — PTP (free-space) + LIN (straight-line), fully deterministic. Requires TRAC-IK first.
-- [ ] **Trajectory smoothing** — OMPL post-processing as an intermediate step before PILZ.
+- [ ] **SmolVLA via LeRobot** — pretrained inference on the LIBERO sim benchmark (feasible
+  on the 3060 Ti: 450M params, inference fits easily in 8 GB).
+- [ ] **One small fine-tune** — reduced batch (~16–24); learn the imitation-learning
+  workflow end to end: dataset → policy → eval.
+- [ ] **Write-up** — what worked, what the hardware ceiling actually is, whether a second
+  VLA experiment belongs in A4. Knowledge-base notes for the concepts.
+
+Hard stop after the time box regardless of outcome — findings feed the next review.
+
+## A3 — Deep Control Chain (open-ended; the centerpiece)
+
+The deterministic industrial planning chain used in real UR deployments. Promoted from
+old Phase 6: the engineering cost *is* the learning. Socratic mode; implementations owned,
+not delegated.
+
+- [ ] **TRAC-IK (or Bio-IK) as KDL replacement** — repeatable configs near workspace
+  boundaries; configure under `ur_manipulator` in `kinematics.yaml`.
+- [ ] **Full PILZ** — PTP + LIN everywhere applicable; add `config/pilz_cartesian_limits.yaml`
+  (currently missing — LIN needs it).
+- [ ] **Trajectory smoothing / time-parameterisation** — compare against the OMPL baseline.
+- [ ] **Skip-retry on deterministic planner failures** (backlog item — pull in here).
+
+## A4 — Perception upgrades (optional; decide at the A3 review)
+
+Kept because they're genuinely wanted improvements, demoted from "headline" status.
+
+- [ ] Yaw-aware grasp orientation (RPY decompose, keep yaw + fixed downward pitch)
+- [ ] Orientation / object detection beyond ArUco — possibly merged into a second VLA
+  experiment instead of a standalone YOLO/FoundationPose swap. Re-decide then.
+
+## Deferred (unsequenced — pull in only if it becomes the highest-learning item)
+
+Mimic-joint fix, camera URDF integration, on-demand detection service, target-pose
+detection, multi-object, proper SDF model, hand-eye calibration, sim→real transfer guide.
+Detail stays in `docs/backlog.md`.
 
 ---
 
 ## Status summary
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Simulation (Gazebo + UR3e) | ✅ Done | Gripper, controllers, LinkAttacher working |
-| Vision pipeline | ✅ Done | ArUco, TF2 transform, `/vision/object_pose` |
-| Pick-place controller | ✅ Done | 9 stages, MoveIt2, gripper, attachment |
-| Task manager | ✅ Done | RunTask action, staleness check, feedback |
-| Motion quality | ✅ Done | Clean 9/9 run verified. Hybrid OMPL/PILZ; stage-5 seed fix; gripper latency fixed; collision-scene lifecycle; vision/geometry z-decoupling. Only the mimic-joint flick remains (Phase 6). |
-| Demo recording | ⏭️ Unblocked | Motion is demo-ready — Phase 3 next |
-| README | ❌ Not started | |
-| Advanced features | ❌ Not started | |
+| Block | Status | Notes |
+|-------|--------|-------|
+| Phases 1–2 (pipeline + motion) | ✅ Done | Original mission complete |
+| A1 — v1 closure | 🎯 Current | Robustness + proof artifact; gates Track B |
+| A2 — VLA probe | ⏳ Next | Time-boxed calibration experiment |
+| A3 — deep control chain | ❌ Not started | TRAC-IK → PILZ → smoothing |
+| A4 — perception | ⏸️ Optional | Decided at A3 review |
 
-See `docs/backlog.md` for the detailed enhancement backlog.
+Review cadence and cross-track rhythm: see `master-plan.md`.
